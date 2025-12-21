@@ -19,49 +19,49 @@ class GeminiBackend {
   }
 
   async embedDocuments(texts) {
-    const embeddings = [];
-    for (const text of texts) {
-       const res = await this._retry(() => this.client.models.embedContent({ 
-           model: this.config.modelName, 
-           contents: text, 
-           config: { outputDimensionality: this.config.dimensions } 
-       }));
-       embeddings.push(res.embedding.values);
-    }
-    return embeddings;
+    const res = await this._retry(() => this.client.models.embedContent({
+      model: this.config.modelName,
+      contents: texts,
+      config: { outputDimensionality: this.config.dimensions }
+    }));
+    const out = res?.embeddings || res?.data?.embeddings;
+    if (!out || !Array.isArray(out)) throw new Error('Gemini embedding response missing embeddings');
+    return out.map(e => e.values || e.embedding?.values || e);
   }
   async embedQuery(text) {
-    const res = await this._retry(() => this.client.models.embedContent({ 
-        model: this.config.modelName, 
-        contents: text, 
-        config: { outputDimensionality: this.config.dimensions } 
+    const res = await this._retry(() => this.client.models.embedContent({
+      model: this.config.modelName,
+      contents: text,
+      config: { outputDimensionality: this.config.dimensions }
     }));
-    return res.embedding.values;
+    const out = res?.embeddings || res?.data?.embeddings;
+    const values = Array.isArray(out) ? out[0]?.values : undefined;
+    if (!values) throw new Error('Gemini embedding response missing values');
+    return values;
   }
   
   async generate(prompt, sys) {
-    const res = await this._retry(() => this.client.models.generateContent({ 
-        model: this.config.modelName, 
-        contents: prompt, 
-        config: { systemInstruction: sys, temperature: this.config.temperature, maxOutputTokens: this.config.maxTokens } 
+    const res = await this._retry(() => this.client.models.generateContent({
+      model: this.config.modelName,
+      contents: prompt,
+      config: { systemInstruction: sys, temperature: this.config.temperature, maxOutputTokens: this.config.maxTokens }
     }));
     return res.text || "";
   }
 
   async *generateStream(prompt, sys) {
     const result = await this.client.models.generateContentStream({
-        model: this.config.modelName,
-        contents: prompt,
-        config: { 
-            systemInstruction: sys, 
-            temperature: this.config.temperature, 
-            maxOutputTokens: this.config.maxTokens 
-        }
+      model: this.config.modelName,
+      contents: prompt,
+      config: {
+        systemInstruction: sys,
+        temperature: this.config.temperature,
+        maxOutputTokens: this.config.maxTokens
+      }
     });
-
-    for await (const chunk of result.stream) {
-        const text = chunk.text();
-        if (text) yield text;
+    for await (const chunk of result) {
+      const text = typeof chunk.text === 'function' ? chunk.text() : chunk.text;
+      if (text) yield { delta: text, finish_reason: null, usage: null };
     }
   }
 }

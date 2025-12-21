@@ -17,7 +17,7 @@ class ChromaVectorStore extends VectorStore {
 
     async addDocuments(docs) {
         await this._init();
-        const ids = docs.map(() => uuidv4());
+        const ids = docs.map((d) => d.id || uuidv4());
         const embeddings = docs.map(d => d.embedding);
         const metadatas = docs.map(d => d.metadata);
         const documents = docs.map(d => d.content);
@@ -28,6 +28,32 @@ class ChromaVectorStore extends VectorStore {
             metadatas,
             documents
         });
+    }
+
+    async upsertDocuments(docs) {
+        await this._init();
+        const ids = docs.map((d) => d.id || uuidv4());
+        const embeddings = docs.map(d => d.embedding);
+        const metadatas = docs.map(d => d.metadata);
+        const documents = docs.map(d => d.content);
+        if (typeof this.collection.upsert === 'function') {
+            await this.collection.upsert({ ids, embeddings, metadatas, documents });
+            return;
+        }
+        if (typeof this.collection.delete === 'function') {
+            try { await this.collection.delete({ ids }); } catch (_) {}
+        }
+        await this.collection.add({ ids, embeddings, metadatas, documents });
+    }
+    
+    async fileExists(sha256, size, lastModified) {
+        await this._init();
+        try {
+            const res = await this.collection.get({ where: { fileSHA256: sha256, fileSize: size, lastModified } });
+            return !!(res && Array.isArray(res.ids) && res.ids.length > 0);
+        } catch (_) {
+            return false;
+        }
     }
 
     async similaritySearch(vector, limit = 5, filter = null) {
@@ -50,6 +76,35 @@ class ChromaVectorStore extends VectorStore {
             });
         }
         return out;
+    }
+
+    async listDocuments({ filter = null, limit = 100, offset = 0 } = {}) {
+        await this._init();
+        const lim = Math.max(1, Math.min(1000, Number(limit) || 100));
+        const off = Math.max(0, Number(offset) || 0);
+        const res = await this.collection.get({
+            where: filter || undefined,
+            limit: lim,
+            offset: off,
+            include: ['documents', 'metadatas']
+        });
+        const ids = Array.isArray(res?.ids) ? res.ids : [];
+        const documents = Array.isArray(res?.documents) ? res.documents : [];
+        const metadatas = Array.isArray(res?.metadatas) ? res.metadatas : [];
+        return ids.map((id, i) => ({ id, content: documents[i], metadata: metadatas[i] }));
+    }
+
+    async deleteDocuments({ ids = null, filter = null } = {}) {
+        await this._init();
+        if (Array.isArray(ids) && ids.length > 0) {
+            await this.collection.delete({ ids });
+            return;
+        }
+        if (filter) {
+            await this.collection.delete({ where: filter });
+            return;
+        }
+        throw new Error('deleteDocuments requires ids or filter');
     }
 }
 module.exports = { ChromaVectorStore };

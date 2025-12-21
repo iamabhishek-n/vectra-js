@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vectra Configuration</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        /* Custom scrollbar for JSON preview */
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Smooth transition for JSON opacity */
+        .json-section { transition: opacity 0.3s ease-in-out; }
+        .json-dimmed { opacity: 0.4; filter: blur(0.5px); grayscale: 100%; }
+        .json-active { opacity: 1; }
+    </style>
+</head>
+<body class="bg-gray-50 text-slate-800 antialiased h-screen flex overflow-hidden">
+
+    <!-- Sidebar / Navigation (20%) -->
+    <aside class="w-[20%] bg-white border-r border-gray-200 flex-shrink-0 flex flex-col z-20 shadow-sm">
+        <div class="p-6 border-b border-gray-100 flex items-center space-x-3">
+            <div class="bg-indigo-600 p-2 rounded-lg text-white">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            </div>
+            <span class="font-bold text-xl tracking-tight text-gray-900">Vectra</span>
+        </div>
+        
+        <nav class="flex-1 overflow-y-auto p-4 space-y-1">
+            <a href="#embedding" class="nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-indigo-600 transition-colors active" data-target="embedding">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                <span>Embedding</span>
+            </a>
+            <a href="#llm" class="nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-indigo-600 transition-colors" data-target="llm">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
+                <span>LLM Provider</span>
+            </a>
+            <a href="#database" class="nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-indigo-600 transition-colors" data-target="database">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path></svg>
+                <span>Database</span>
+            </a>
+            <a href="#chunking" class="nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-indigo-600 transition-colors" data-target="chunking">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                <span>Chunking</span>
+            </a>
+            <a href="#retrieval" class="nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-indigo-600 transition-colors" data-target="retrieval">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                <span>Retrieval</span>
+            </a>
+            <a href="#reranking" class="nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-indigo-600 transition-colors" data-target="reranking">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"></path></svg>
+                <span>Reranking</span>
+            </a>
+            <a href="#metadata" class="nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-indigo-600 transition-colors" data-target="metadata">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
+                <span>Metadata</span>
+            </a>
+            <a href="#query-planning" class="nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-indigo-600 transition-colors" data-target="query-planning">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                <span>Query Planning</span>
+            </a>
+            <a href="#grounding" class="nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-indigo-600 transition-colors" data-target="grounding">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                <span>Grounding</span>
+            </a>
+            <a href="#generation" class="nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-indigo-600 transition-colors" data-target="generation">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                <span>Generation</span>
+            </a>
+            <a href="#prompts" class="nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-indigo-600 transition-colors" data-target="prompts">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path></svg>
+                <span>Prompts</span>
+            </a>
+        </nav>
+        
+        <!-- Sidebar Footer Info -->
+        <div class="p-4 border-t border-gray-100 text-xs text-gray-400 text-center">
+             Vectra v1.0.0
+        </div>
+    </aside>
+
+    <!-- Main Content (50%) -->
+    <main class="w-[50%] flex flex-col overflow-hidden border-r border-gray-200 bg-gray-50">
+        <!-- Configuration Forms Area -->
+        <div class="flex-1 overflow-y-auto p-8 lg:p-12 scroll-smooth" id="main-scroll">
+            <div class="max-w-3xl mx-auto space-y-12 pb-32">
+                
+                <header class="mb-8 flex justify-between items-end">
+                    <div>
+                        <h1 class="text-3xl font-bold text-gray-900 tracking-tight">Pipeline Settings</h1>
+                        <p class="text-base text-gray-600 mt-2">Configure your RAG pipeline parameters and behavior.</p>
+                    </div>
+                    <div class="flex items-center space-x-6">
+                        <!-- Backend Toggle -->
+                        <div class="flex items-center bg-white rounded-lg p-1 border border-gray-200 shadow-sm">
+                            <button type="button" id="backend-node" class="px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 text-indigo-600 bg-indigo-50 shadow-sm">
+                                Node.js
+                            </button>
+                            <button type="button" id="backend-python" class="px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 text-gray-500 hover:text-gray-900">
+                                Python
+                            </button>
+                        </div>
+                        
+                        <div class="flex items-center space-x-2">
+                            <input type="checkbox" id="auto-focus-toggle" class="rounded text-indigo-600 focus:ring-indigo-500 border-gray-300 h-4 w-4">
+                            <label for="auto-focus-toggle" class="text-sm text-gray-700 select-none">Auto-Focus Mode</label>
+                        </div>
+                    </div>
+                </header>
+
+                <form id="config-form" class="space-y-10">
+                    
+                    <!-- Embedding Section -->
+                    <section id="embedding" class="scroll-mt-6 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-md">
+                        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center cursor-pointer accordion-header" data-target="embedding-content">
+                            <div>
+                                <h2 class="text-lg font-semibold text-gray-900">Embedding Model</h2>
+                                <p class="text-xs text-gray-500 mt-0.5">Define how text is converted into vectors.</p>
+                            </div>
+                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 accordion-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                        <div id="embedding-content" class="p-6 space-y-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Provider</label>
+                                <select name="embedding.provider" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border">
+                                    <option value="openai">OpenAI</option>
+                                    <option value="gemini">Gemini</option>
+                                    <option value="anthropic">Anthropic</option>
+                                    <option value="openrouter">OpenRouter</option>
+                                    <option value="huggingface">HuggingFace</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                                <input type="password" name="embedding.apiKey" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="sk-...">
+                            </div>
+                            <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Model Name</label>
+                                    <input type="text" name="embedding.modelName" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="text-embedding-3-small">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Dimensions</label>
+                                    <input type="number" name="embedding.dimensions" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="1536">
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- LLM Section -->
+                    <section id="llm" class="scroll-mt-6 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-md">
+                        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center cursor-pointer accordion-header" data-target="llm-content">
+                            <div>
+                                <h2 class="text-lg font-semibold text-gray-900">LLM Provider</h2>
+                                <p class="text-xs text-gray-500 mt-0.5">Configure the generation model.</p>
+                            </div>
+                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 accordion-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                        <div id="llm-content" class="p-6 space-y-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Provider</label>
+                                <select name="llm.provider" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border">
+                                    <option value="openai">OpenAI</option>
+                                    <option value="gemini">Gemini</option>
+                                    <option value="anthropic">Anthropic</option>
+                                    <option value="openrouter">OpenRouter</option>
+                                    <option value="huggingface">HuggingFace</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                                <input type="password" name="llm.apiKey" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="sk-...">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Model Name</label>
+                                <input type="text" name="llm.modelName" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="gpt-4o">
+                            </div>
+                            <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Temperature</label>
+                                    <div class="flex items-center space-x-3">
+                                        <input type="range" id="temp-slider" min="0" max="1" step="0.1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                                        <input type="number" id="temp-input" step="0.1" min="0" max="1" name="llm.temperature" class="w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-2 border text-center">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Max Tokens</label>
+                                    <input type="number" name="llm.maxTokens" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="1024">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Base URL</label>
+                                <input type="text" name="llm.baseUrl" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="https://api.openai.com/v1 (Optional)">
+                                <p class="mt-1 text-xs text-gray-500 hidden" id="openrouter-base-hint">OpenRouter Default: https://openrouter.ai/api/v1</p>
+                            </div>
+                            
+                            <!-- OpenRouter Specifics -->
+                            <div id="openrouter-extras" class="hidden space-y-4 border-l-4 border-indigo-100 pl-4 py-2">
+                                <h3 class="text-sm font-medium text-indigo-900">OpenRouter Configuration</h3>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Site URL (Referer)</label>
+                                    <input type="text" id="or-referer" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="https://your-site.com">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Site Name (Title)</label>
+                                    <input type="text" id="or-title" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="My App">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Default Headers</label>
+                                <div id="headers-builder" class="space-y-2 mb-3">
+                                    <!-- Dynamic rows -->
+                                </div>
+                                <button type="button" id="add-header-btn" class="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                    <svg class="-ml-0.5 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
+                                    </svg>
+                                    Add Header
+                                </button>
+                                <input type="hidden" name="llm.defaultHeaders"> <!-- Hidden input for serialization -->
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Database Section -->
+                    <section id="database" class="scroll-mt-6 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-md">
+                         <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center cursor-pointer accordion-header" data-target="database-content">
+                            <div>
+                                <h2 class="text-lg font-semibold text-gray-900">Vector Database</h2>
+                                <p class="text-xs text-gray-500 mt-0.5">Storage for your documents and embeddings.</p>
+                            </div>
+                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 accordion-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                        <div id="database-content" class="p-6 space-y-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                                <select name="database.type" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border">
+                                    <option value="prisma">Prisma (PostgreSQL)</option>
+                                    <option value="chroma">ChromaDB</option>
+                                    <option value="qdrant">Qdrant</option>
+                                    <option value="milvus">Milvus</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Table / Collection Name</label>
+                                <input type="text" name="database.tableName" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="Document">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Column Map (JSON)</label>
+                                <textarea name="database.columnMap" rows="4" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border font-mono text-xs"></textarea>
+                                <p class="mt-1 text-xs text-gray-500">Maps internal fields (content, vector, metadata) to DB columns.</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Chunking Section -->
+                    <section id="chunking" class="scroll-mt-6 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-md">
+                        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center cursor-pointer accordion-header" data-target="chunking-content">
+                            <div>
+                                <h2 class="text-lg font-semibold text-gray-900">Chunking Strategy</h2>
+                                <p class="text-xs text-gray-500 mt-0.5">Split documents for processing.</p>
+                            </div>
+                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 accordion-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                        <div id="chunking-content" class="p-6 space-y-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Strategy</label>
+                                <select name="chunking.strategy" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border">
+                                    <option value="recursive">Recursive Character</option>
+                                    <option value="agentic">Agentic (Semantic)</option>
+                                </select>
+                            </div>
+                            <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Chunk Size</label>
+                                    <input type="number" name="chunking.chunkSize" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="1000">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Chunk Overlap</label>
+                                    <input type="number" name="chunking.chunkOverlap" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="200">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Separators (JSON Array)</label>
+                                <textarea name="chunking.separators" rows="2" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border font-mono text-xs"></textarea>
+                            </div>
+                            <div id="agentic-llm-content" class="space-y-4 hidden border-l-4 border-indigo-100 pl-4 py-2">
+                                <h3 class="text-sm font-medium text-indigo-900">Agentic Chunking LLM</h3>
+                                <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Provider</label>
+                                        <select name="chunking.agentic.provider" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border">
+                                            <option value="openai">OpenAI</option>
+                                            <option value="gemini">Gemini</option>
+                                            <option value="anthropic">Anthropic</option>
+                                            <option value="openrouter">OpenRouter</option>
+                                            <option value="huggingface">HuggingFace</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Model Name</label>
+                                        <input type="text" name="chunking.agentic.modelName" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="gpt-4o-mini">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                                        <input type="password" name="chunking.agentic.apiKey" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="sk-...">
+                                    </div>
+                                    <div>
+                                        <label class="block text sm font-medium text-gray-700 mb-1">Temperature</label>
+                                        <input type="number" step="0.1" min="0" max="1" name="chunking.agentic.temperature" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="0">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Max Tokens</label>
+                                        <input type="number" name="chunking.agentic.maxTokens" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="512">
+                                    </div>
+                                    <div class="sm:col-span-2">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Base URL</label>
+                                        <input type="text" name="chunking.agentic.baseUrl" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="https://...">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Retrieval Section -->
+                    <section id="retrieval" class="scroll-mt-6 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-md">
+                        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center cursor-pointer accordion-header" data-target="retrieval-content">
+                            <div>
+                                <h2 class="text-lg font-semibold text-gray-900">Retrieval Strategy</h2>
+                                <p class="text-xs text-gray-500 mt-0.5">Find relevant context.</p>
+                            </div>
+                            <div class="flex items-center space-x-3">
+                                <label class="flex items-center space-x-2 text-xs text-gray-600 select-none">
+                                    <input type="checkbox" name="toggle.retrieval" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                                    <span>Enable</span>
+                                </label>
+                                <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 accordion-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </div>
+                        </div>
+                        <div id="retrieval-content" class="p-6 space-y-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Strategy</label>
+                                <select name="retrieval.strategy" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border">
+                                    <option value="naive">Naive (Cosine Similarity)</option>
+                                    <option value="hyde">HyDE (Hypothetical Document)</option>
+                                    <option value="multi_query">Multi-Query</option>
+                                    <option value="hybrid">Hybrid (Keyword + Vector)</option>
+                                    <option value="mmr">MMR (Diversify Results)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Hybrid Alpha (0.0 - 1.0)</label>
+                                <input type="number" step="0.1" min="0" max="1" name="retrieval.hybridAlpha" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="0.5">
+                                <p class="mt-1 text-xs text-gray-500">0.0 = Keyword only, 1.0 = Vector only.</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">MMR Lambda (0.0 - 1.0)</label>
+                                <input type="number" step="0.05" min="0" max="1" name="retrieval.mmrLambda" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="0.5">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">MMR Fetch K</label>
+                                <input type="number" step="1" min="1" name="retrieval.mmrFetchK" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="20">
+                            </div>
+                            <div id="retrieval-llm-content" class="space-y-4 hidden border-l-4 border-indigo-100 pl-4 py-2">
+                                <h3 class="text-sm font-medium text-indigo-900">Retrieval LLM Config</h3>
+                                <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Provider</label>
+                                        <select name="retrieval.llm.provider" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border">
+                                            <option value="openai">OpenAI</option>
+                                            <option value="gemini">Gemini</option>
+                                            <option value="anthropic">Anthropic</option>
+                                            <option value="openrouter">OpenRouter</option>
+                                            <option value="huggingface">HuggingFace</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Model Name</label>
+                                        <input type="text" name="retrieval.llm.modelName" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="gpt-4o-mini">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Temperature</label>
+                                        <input type="number" step="0.1" min="0" max="1" name="retrieval.llm.temperature" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="0">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Max Tokens</label>
+                                        <input type="number" name="retrieval.llm.maxTokens" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="512">
+                                    </div>
+                                    <div class="sm:col-span-2">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Base URL</label>
+                                        <input type="text" name="retrieval.llm.baseUrl" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="https://...">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Reranking Section -->
+                    <section id="reranking" class="scroll-mt-6 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-md">
+                        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center cursor-pointer accordion-header" data-target="reranking-content">
+                            <div>
+                                <h2 class="text-lg font-semibold text-gray-900">Reranking</h2>
+                                <p class="text-xs text-gray-500 mt-0.5">Improve result relevance.</p>
+                            </div>
+                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 accordion-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                        <div id="reranking-content" class="p-6 space-y-6">
+                            <div class="flex items-center space-x-3">
+                                <input type="checkbox" name="reranking.enabled" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                                <label class="text-sm font-medium text-gray-700">Enable Reranking</label>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Top N</label>
+                                <input type="number" name="reranking.topN" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="5">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Window Size</label>
+                                <input type="number" name="reranking.windowSize" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="20">
+                            </div>
+                            <div id="reranking-llm-content" class="space-y-4 hidden border-l-4 border-indigo-100 pl-4 py-2">
+                                <h3 class="text-sm font-medium text-indigo-900">Reranking LLM Config</h3>
+                                <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Provider</label>
+                                        <select name="reranking.llm.provider" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border">
+                                            <option value="openai">OpenAI</option>
+                                            <option value="gemini">Gemini</option>
+                                            <option value="anthropic">Anthropic</option>
+                                            <option value="openrouter">OpenRouter</option>
+                                            <option value="huggingface">HuggingFace</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Model Name</label>
+                                        <input type="text" name="reranking.llm.modelName" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="gpt-4o-mini">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Temperature</label>
+                                        <input type="number" step="0.1" min="0" max="1" name="reranking.llm.temperature" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="0">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Max Tokens</label>
+                                        <input type="number" name="reranking.llm.maxTokens" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="512">
+                                    </div>
+                                    <div class="sm:col-span-2">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Base URL</label>
+                                        <input type="text" name="reranking.llm.baseUrl" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="https://...">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                    <!-- Metadata Section -->
+                    <section id="metadata" class="scroll-mt-6 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-md">
+                        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center cursor-pointer accordion-header" data-target="metadata-content">
+                            <div>
+                                <h2 class="text-lg font-semibold text-gray-900">Metadata</h2>
+                                <p class="text-xs text-gray-500 mt-0.5">Configure metadata extraction and filters.</p>
+                            </div>
+                            <div class="flex items-center space-x-3">
+                                <label class="flex items-center space-x-2 text-xs text-gray-600 select-none">
+                                    <input type="checkbox" name="toggle.metadata" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                                    <span>Enable</span>
+                                </label>
+                                <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 accordion-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </div>
+                        </div>
+                        <div id="metadata-content" class="p-6 space-y-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Filters (JSON)</label>
+                                <textarea name="metadata.filters" rows="3" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border font-mono text-xs"></textarea>
+                                <p class="mt-1 text-xs text-gray-500">Global metadata filters to apply.</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Query Planning Section -->
+                    <section id="query-planning" class="scroll-mt-6 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-md">
+                        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center cursor-pointer accordion-header" data-target="query-planning-content">
+                            <div>
+                                <h2 class="text-lg font-semibold text-gray-900">Query Planning</h2>
+                                <p class="text-xs text-gray-500 mt-0.5">Decompose and optimize queries.</p>
+                            </div>
+                            <div class="flex items-center space-x-3">
+                                <label class="flex items-center space-x-2 text-xs text-gray-600 select-none">
+                                    <input type="checkbox" name="toggle.queryPlanning" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                                    <span>Enable</span>
+                                </label>
+                                <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 accordion-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </div>
+                        </div>
+                        <div id="query-planning-content" class="p-6 space-y-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Strategy</label>
+                                <select name="queryPlanning.strategy" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border">
+                                    <option value="none">None</option>
+                                    <option value="decomposition">Decomposition</option>
+                                    <option value="hyde">HyDE</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Initial Prompts (JSON Array)</label>
+                                <textarea name="queryPlanning.initialPrompts" rows="3" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border font-mono text-xs"></textarea>
+                            </div>
+                            <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Token Budget</label>
+                                    <input type="number" name="queryPlanning.tokenBudget" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="2048">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Prefer Summaries Below</label>
+                                    <input type="number" name="queryPlanning.preferSummariesBelow" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="1024">
+                                </div>
+                                <div class="flex items-center space-x-3 pt-6">
+                                    <input type="checkbox" name="queryPlanning.includeCitations" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                                    <label class="text-sm font-medium text-gray-700">Include Citations</label>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Grounding Section -->
+                    <section id="grounding" class="scroll-mt-6 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-md">
+                        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center cursor-pointer accordion-header" data-target="grounding-content">
+                            <div>
+                                <h2 class="text-lg font-semibold text-gray-900">Grounding</h2>
+                                <p class="text-xs text-gray-500 mt-0.5">Verify and cite sources.</p>
+                            </div>
+                            <div class="flex items-center space-x-3">
+                                <label class="flex items-center space-x-2 text-xs text-gray-600 select-none">
+                                    <input type="checkbox" name="toggle.grounding" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                                    <span>Enable</span>
+                                </label>
+                                <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 accordion-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </div>
+                        </div>
+                        <div id="grounding-content" class="p-6 space-y-6">
+                            <div class="flex items-center space-x-3">
+                                <input type="checkbox" name="grounding.enabled" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                                <label class="text-sm font-medium text-gray-700">Enable Grounding Check</label>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Threshold (0.0 - 1.0)</label>
+                                <input type="number" step="0.1" min="0" max="1" name="grounding.threshold" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="0.7">
+                            </div>
+                            <div class="flex items-center space-x-3">
+                                <input type="checkbox" name="grounding.strict" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                                <label class="text-sm font-medium text-gray-700">Strict Mode</label>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Max Snippets</label>
+                                <input type="number" name="grounding.maxSnippets" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="3">
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Generation Section -->
+                    <section id="generation" class="scroll-mt-6 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-md">
+                        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center cursor-pointer accordion-header" data-target="generation-content">
+                            <div>
+                                <h2 class="text-lg font-semibold text-gray-900">Generation</h2>
+                                <p class="text-xs text-gray-500 mt-0.5">Final response generation settings.</p>
+                            </div>
+                            <div class="flex items-center space-x-3">
+                                <label class="flex items-center space-x-2 text-xs text-gray-600 select-none">
+                                    <input type="checkbox" name="toggle.generation" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                                    <span>Enable</span>
+                                </label>
+                                <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 accordion-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </div>
+                        </div>
+                        <div id="generation-content" class="p-6 space-y-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Style</label>
+                                <select name="generation.style" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border">
+                                    <option value="concise">Concise</option>
+                                    <option value="detailed">Detailed</option>
+                                    <option value="creative">Creative</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Max Length</label>
+                                <input type="number" name="generation.maxLength" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border" placeholder="2048">
+                            </div>
+                            <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Structured Output</label>
+                                    <select name="generation.structuredOutput" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border">
+                                        <option value="none">None</option>
+                                        <option value="citations">Citations</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Output Format</label>
+                                    <select name="generation.outputFormat" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border">
+                                        <option value="text">Text</option>
+                                        <option value="json">JSON</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Prompts Section -->
+                    <section id="prompts" class="scroll-mt-6 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-md">
+                        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center cursor-pointer accordion-header" data-target="prompts-content">
+                            <div>
+                                <h2 class="text-lg font-semibold text-gray-900">Prompts</h2>
+                                <p class="text-xs text-gray-500 mt-0.5">Customize system and user prompts.</p>
+                            </div>
+                            <div class="flex items-center space-x-3">
+                                <label class="flex items-center space-x-2 text-xs text-gray-600 select-none">
+                                    <input type="checkbox" name="toggle.prompts" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                                    <span>Enable</span>
+                                </label>
+                                <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 accordion-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </div>
+                        </div>
+                        <div id="prompts-content" class="p-6 space-y-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">System Prompt</label>
+                                <textarea name="prompts.system" rows="4" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border font-mono text-xs"></textarea>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">User Prompt Template</label>
+                                <textarea name="prompts.user" rows="4" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border font-mono text-xs"></textarea>
+                            </div>
+                        </div>
+                    </section>
+                </form>
+            </div>
+            
+            <!-- Sticky Footer for Save -->
+            <div class="fixed bottom-0 left-[20%] right-[30%] p-4 bg-white/90 backdrop-blur-sm border-t border-gray-200 z-10 flex justify-end items-center space-x-4">
+                <div id="status-msg" class="text-sm font-medium transition-colors duration-300"></div>
+                <button id="save-btn" class="inline-flex justify-center items-center py-2.5 px-6 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all transform hover:scale-105">
+                    Save Configuration
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Live Summary Sidebar (30%) -->
+    <aside class="w-[30%] bg-gray-50 border-l border-gray-200 flex-shrink-0 flex flex-col hidden lg:flex">
+        <div class="px-6 py-4 border-b border-gray-200 bg-white shadow-sm z-10">
+            <h3 class="text-sm font-semibold text-gray-900 uppercase tracking-wider">Live Preview</h3>
+            <p class="text-xs text-gray-500 mt-1">Real-time configuration state</p>
+        </div>
+        <div id="preview-scroll" class="flex-1 overflow-y-auto p-4 bg-[#1e1e1e] text-[#d4d4d4] font-mono text-xs">
+             <div id="json-preview" class="space-y-1">
+                 <!-- Dynamic Content -->
+             </div>
+        </div>
+    </aside>
+
+    <script src="script.js"></script>
+</body>
+</html>

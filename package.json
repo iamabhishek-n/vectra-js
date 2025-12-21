@@ -5,7 +5,13 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "prisma:generate": "prisma generate"
+    "prisma:generate": "prisma generate",
+    "lint": "eslint . --ext .js,.cjs,.mjs",
+    "lint:fix": "eslint . --ext .js,.cjs,.mjs --fix",
+    "prepublishOnly": "pnpm run lint"
+  },
+  "bin": {
+    "vectra": "bin/vectra.js"
   },
   "keywords": [
     "rag",
@@ -32,6 +38,8 @@
     "@prisma/client": "^5.0.0"
   },
   "devDependencies": {
-    "prisma": "^5.22.0"
+    "prisma": "^5.22.0",
+    "eslint": "^9.13.0",
+    "globals": "^13.24.0"
   }
 }

@@ -29,7 +29,7 @@ class AnthropicBackend {
 
     for await (const chunk of stream) {
         if (chunk.type === 'content_block_delta') {
-            yield chunk.delta.text;
+            yield { delta: chunk.delta.text, finish_reason: null, usage: null };
         }
     }
   }

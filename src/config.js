@@ -4,6 +4,9 @@ const ProviderType = {
   OPENAI: 'openai',
   ANTHROPIC: 'anthropic',
   GEMINI: 'gemini',
+  OPENROUTER: 'openrouter',
+  HUGGINGFACE: 'huggingface',
+  OLLAMA: 'ollama',
 };
 
 const ChunkingStrategy = {
@@ -15,7 +18,8 @@ const RetrievalStrategy = {
   NAIVE: 'naive',
   HYDE: 'hyde',
   MULTI_QUERY: 'multi_query',
-  HYBRID: 'hybrid' // New Strategy
+  HYBRID: 'hybrid',
+  MMR: 'mmr'
 };
 
 const EmbeddingConfigSchema = z.object({
@@ -31,6 +35,8 @@ const LLMConfigSchema = z.object({
   modelName: z.string(),
   temperature: z.number().default(0),
   maxTokens: z.number().default(1024),
+  baseUrl: z.string().optional(),
+  defaultHeaders: z.record(z.string()).optional(),
 });
 
 const ChunkingConfigSchema = z.object({
@@ -55,7 +61,9 @@ const RerankingConfigSchema = z.object({
 const RetrievalConfigSchema = z.object({
     strategy: z.nativeEnum(RetrievalStrategy).default(RetrievalStrategy.NAIVE),
     llmConfig: LLMConfigSchema.optional(),
-    hybridAlpha: z.number().default(0.5)
+    hybridAlpha: z.number().default(0.5),
+    mmrLambda: z.number().default(0.5),
+    mmrFetchK: z.number().default(20)
 }).refine((data) => {
     if ((data.strategy === RetrievalStrategy.HYDE || data.strategy === RetrievalStrategy.MULTI_QUERY) && !data.llmConfig) return false;
     return true;
@@ -79,6 +87,32 @@ const RAGConfigSchema = z.object({
   chunking: ChunkingConfigSchema.default({}),
   retrieval: RetrievalConfigSchema.default({}),
   reranking: RerankingConfigSchema.default({}),
+  metadata: z.object({ enrichment: z.boolean().default(false) }).optional(),
+  ingestion: z.object({ rateLimitEnabled: z.boolean().default(false), concurrencyLimit: z.number().default(5) }).optional(),
+  memory: z.object({
+    enabled: z.boolean().default(false),
+    type: z.enum(['in-memory','redis','postgres']).default('in-memory'),
+    maxMessages: z.number().default(20),
+    redis: z.object({
+      clientInstance: z.any().optional(),
+      keyPrefix: z.string().default('vectra:chat:')
+    }).optional(),
+    postgres: z.object({
+      clientInstance: z.any().optional(),
+      tableName: z.string().default('ChatMessage'),
+      columnMap: z.object({
+        sessionId: z.string().default('sessionId'),
+        role: z.string().default('role'),
+        content: z.string().default('content'),
+        createdAt: z.string().default('createdAt')
+      }).default({ sessionId: 'sessionId', role: 'role', content: 'content', createdAt: 'createdAt' })
+    }).optional()
+  }).optional(),
+  queryPlanning: z.object({ tokenBudget: z.number().default(2048), preferSummariesBelow: z.number().default(1024), includeCitations: z.boolean().default(true) }).optional(),
+  grounding: z.object({ enabled: z.boolean().default(false), strict: z.boolean().default(false), maxSnippets: z.number().default(3) }).optional(),
+  generation: z.object({ structuredOutput: z.enum(['none','citations']).default('none'), outputFormat: z.enum(['text','json']).default('text') }).optional(),
+  prompts: z.object({ query: z.string().optional(), reranking: z.string().optional() }).optional(),
+  tracing: z.object({ enable: z.boolean().default(false) }).optional(),
   callbacks: z.array(z.custom((val) => true)).optional(), 
 });
 
