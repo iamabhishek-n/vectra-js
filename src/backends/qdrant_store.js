@@ -36,7 +36,7 @@ class QdrantVectorStore extends VectorStore {
     const lim = Math.max(1, Math.min(1000, Number(limit) || 100));
     const off = Math.max(0, Number(offset) || 0);
     let skipped = 0;
-    let out = [];
+    const out = [];
     let nextOffset = undefined;
     while (out.length < lim) {
       const res = await this.client.scroll(this.collection, { limit: Math.min(256, lim), filter: qFilter, offset: nextOffset });

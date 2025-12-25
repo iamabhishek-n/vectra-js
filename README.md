@@ -4,7 +4,7 @@ A production-ready, provider-agnostic Node.js SDK for End-to-End RAG (Retrieval-
 
 ## Features
 
-*   **Multi-Provider Support**: First-class support for **OpenAI**, **Gemini**, and **Anthropic**.
+*   **Multi-Provider Support**: First-class support for **OpenAI**, **Gemini**, **Anthropic**, **OpenRouter**, and **Hugging Face**.
 *   **Modular Vector Store**:
     *   **Prisma**: Use your existing PostgreSQL database with `pgvector`.
     *   **ChromaDB**: Native support for the open-source vector database.
@@ -30,6 +30,7 @@ A production-ready, provider-agnostic Node.js SDK for End-to-End RAG (Retrieval-
 *   **Conversation Memory**: Built-in chat history management for context-aware multi-turn conversations.
 *   **Production Evaluation**: Integrated evaluation module to measure RAG quality (Faithfulness, Relevance).
 *   **Local LLMs**: First-class support for **Ollama** for local/offline development.
+*   **Web Configuration UI**: Visual generator to create and validate your configuration file (`vectra webconfig`).
 
 ---
 
