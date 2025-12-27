@@ -28,12 +28,18 @@ async function run() {
   
   if (cmd === 'webconfig') {
       const cfgPath = configPath || path.join(process.cwd(), 'vectra-config.json');
-      startWebConfig(cfgPath);
+      startWebConfig(cfgPath, 'webconfig');
       return;
   }
 
-  if (!cmd || (!target && cmd !== 'webconfig')) {
-    console.error('Usage: vectra <ingest|query|webconfig> <path|text> [--config=path] [--stream]');
+  if (cmd === 'dashboard') {
+      const cfgPath = configPath || path.join(process.cwd(), 'vectra-config.json');
+      startWebConfig(cfgPath, 'dashboard');
+      return;
+  }
+
+  if (!cmd || (!target && cmd !== 'webconfig' && cmd !== 'dashboard')) {
+    console.error('Usage: vectra <ingest|query|webconfig|dashboard> <path|text> [--config=path] [--stream]');
     process.exit(1);
   }
 

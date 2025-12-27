@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vectra Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .sidebar-link.active { background-color: #f3f4f6; color: #111827; }
+        .sidebar-link:hover { background-color: #f9fafb; color: #111827; }
+    </style>
+</head>
+<body class="bg-gray-50 text-slate-800 h-screen overflow-hidden flex">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-white border-r border-gray-200 flex-col hidden md:flex">
+        <!-- Logo -->
+        <div class="h-16 flex items-center px-6 border-b border-gray-100">
+            <div class="flex items-center gap-2">
+                <div class="bg-indigo-600 p-1.5 rounded-lg text-white">
+                    <i data-lucide="layers" class="w-5 h-5"></i>
+                </div>
+                <span class="text-xl font-bold text-slate-900 tracking-tight">Vectra</span>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <nav class="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+            <div class="mb-6">
+                <p class="px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Menu</p>
+                <button onclick="switchView('overview')" id="btn-overview" class="w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-600 sidebar-link active group transition-colors">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5 mr-3 text-gray-400 group-hover:text-gray-500"></i>
+                    Dashboard
+                </button>
+                <button onclick="switchView('traces')" id="btn-traces" class="w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-600 sidebar-link group transition-colors">
+                    <i data-lucide="activity" class="w-5 h-5 mr-3 text-gray-400 group-hover:text-gray-500"></i>
+                    Traces
+                </button>
+                <button onclick="switchView('sessions')" id="btn-sessions" class="w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-600 sidebar-link group transition-colors">
+                    <i data-lucide="users" class="w-5 h-5 mr-3 text-gray-400 group-hover:text-gray-500"></i>
+                    Sessions
+                </button>
+            </div>
+            
+            <div>
+                <p class="px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Management</p>
+                <a href="#" class="w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-600 sidebar-link group transition-colors">
+                    <i data-lucide="settings" class="w-5 h-5 mr-3 text-gray-400 group-hover:text-gray-500"></i>
+                    Settings
+                </a>
+                <a href="#" class="w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-600 sidebar-link group transition-colors">
+                    <i data-lucide="book-open" class="w-5 h-5 mr-3 text-gray-400 group-hover:text-gray-500"></i>
+                    Documentation
+                </a>
+            </div>
+        </nav>
+
+        <!-- User Profile (Bottom) -->
+        <div class="p-4 border-t border-gray-100">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs">
+                    AD
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-gray-900">Admin User</p>
+                    <p class="text-xs text-gray-500">admin@vectra.ai</p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+        
+        <!-- Top Header -->
+        <header class="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 lg:px-8">
+            <div class="flex items-center flex-1">
+                <div class="relative w-full max-w-md">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i data-lucide="search" class="h-5 w-5 text-gray-400"></i>
+                    </div>
+                    <input type="text" class="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition duration-150 ease-in-out" placeholder="Search traces, sessions, or logs...">
+                </div>
+            </div>
+            <div class="ml-4 flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <label for="projectSelect" class="text-sm font-medium text-gray-500">Project:</label>
+                    <select id="projectSelect" class="bg-gray-50 border border-gray-200 text-gray-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2">
+                        <option value="all">All Projects</option>
+                    </select>
+                </div>
+                <button class="p-2 text-gray-400 hover:text-gray-500">
+                    <i data-lucide="bell" class="w-6 h-6"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Scrollable Area -->
+        <main class="flex-1 overflow-y-auto bg-gray-50 p-6 lg:p-8">
+            
+            <!-- View: Overview -->
+            <div id="view-overview" class="space-y-8 max-w-7xl mx-auto">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-900">System Overview</h2>
+                    <p class="mt-1 text-sm text-gray-500">Real-time metrics and system status.</p>
+                </div>
+
+                <!-- Status Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    
+                    <!-- Total Requests (Server Status style) -->
+                    <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 relative overflow-hidden group">
+                        <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-emerald-500"></div>
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="text-gray-500 text-sm font-medium">Total Requests</h3>
+                                <div class="mt-4 flex items-baseline">
+                                    <span class="text-4xl font-bold text-gray-900 tracking-tight" id="stat-total-req">-</span>
+                                </div>
+                                <div class="mt-2 flex items-center text-sm text-emerald-600 font-medium">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500 mr-2"></span>
+                                    Operational
+                                </div>
+                            </div>
+                            <div class="p-3 bg-emerald-50 rounded-xl text-emerald-600">
+                                <i data-lucide="server" class="w-6 h-6"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Error Rate (Crashed Services style) -->
+                    <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 relative overflow-hidden group">
+                        <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-rose-500"></div>
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="text-gray-500 text-sm font-medium">Error Rate</h3>
+                                <div class="mt-4 flex items-baseline">
+                                    <span class="text-4xl font-bold text-gray-900 tracking-tight" id="stat-errors">-</span>
+                                </div>
+                                <div class="mt-2 flex items-center text-sm text-rose-600 font-medium">
+                                    <i data-lucide="alert-circle" class="w-4 h-4 mr-1"></i>
+                                    Check Logs
+                                </div>
+                            </div>
+                            <div class="p-3 bg-rose-50 rounded-xl text-rose-600">
+                                <i data-lucide="activity" class="w-6 h-6"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Token Usage (Account Quote style) -->
+                    <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col justify-between">
+                        <div>
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-gray-500 text-sm font-medium">Token Usage</h3>
+                                <span class="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">Monthly</span>
+                            </div>
+                            <div class="flex items-baseline mb-2">
+                                <span class="text-2xl font-bold text-gray-900" id="stat-tokens">-</span>
+                                <span class="ml-2 text-sm text-gray-500">tokens</span>
+                            </div>
+                            <div class="w-full bg-gray-100 rounded-full h-2 mb-4 overflow-hidden">
+                                <div class="bg-indigo-500 h-2 rounded-full" style="width: 65%"></div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 pt-4 border-t border-gray-50">
+                            <div>
+                                <p class="text-xs text-gray-500">Prompt</p>
+                                <p class="font-semibold text-gray-900">~65%</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500">Completion</p>
+                                <p class="font-semibold text-gray-900">~35%</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Section -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Latency Chart (Logged Commits style) -->
+                    <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                        <div class="flex justify-between items-center mb-6">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-900">Latency Trend</h3>
+                                <p class="text-sm text-gray-500">Response time over last 24 hours</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-2xl font-bold text-indigo-600" id="stat-avg-latency">-</p>
+                                <p class="text-xs text-gray-500">Avg ms</p>
+                            </div>
+                        </div>
+                        <div class="h-72 w-full">
+                            <canvas id="latencyChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Secondary Chart (Token Usage) -->
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                        <div class="mb-6">
+                            <h3 class="text-lg font-bold text-gray-900">Token Distribution</h3>
+                            <p class="text-sm text-gray-500">Usage by interaction</p>
+                        </div>
+                        <div class="h-64 w-full">
+                            <canvas id="tokenChart"></canvas>
+                        </div>
+                        <div class="mt-4 pt-4 border-t border-gray-50">
+                            <button class="w-full py-2 px-4 bg-gray-50 hover:bg-gray-100 text-gray-600 text-sm font-medium rounded-lg transition-colors flex items-center justify-center">
+                                View Full Report
+                                <i data-lucide="arrow-right" class="w-4 h-4 ml-2"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View: Traces -->
+            <div id="view-traces" class="hidden space-y-6 max-w-7xl mx-auto">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-900">Traces</h2>
+                        <p class="mt-1 text-sm text-gray-500">Detailed logs of all LLM interactions.</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 flex items-center">
+                            <i data-lucide="filter" class="w-4 h-4 mr-2"></i> Filter
+                        </button>
+                        <button class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 flex items-center">
+                            <i data-lucide="download" class="w-4 h-4 mr-2"></i> Export
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Trace ID</th>
+                                    <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
+                                    <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Latency</th>
+                                    <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Time</th>
+                                    <th class="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200" id="traces-table-body">
+                                <!-- Populated via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <!-- Pagination (Mock) -->
+                    <div class="bg-gray-50 px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+                        <span class="text-sm text-gray-500">Showing recent items</span>
+                        <div class="flex gap-2">
+                            <button class="p-2 border border-gray-300 rounded-md bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50" disabled>
+                                <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                            </button>
+                            <button class="p-2 border border-gray-300 rounded-md bg-white text-gray-500 hover:bg-gray-50">
+                                <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View: Sessions -->
+            <div id="view-sessions" class="hidden space-y-6 max-w-7xl mx-auto">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-900">Active Sessions</h2>
+                    <p class="mt-1 text-sm text-gray-500">User sessions and conversation history.</p>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Session ID</th>
+                                    <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Last Query</th>
+                                    <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Last Active</th>
+                                    <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Metadata</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200" id="sessions-table-body">
+                                <!-- Populated via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script src="./dashboard-script.js"></script>
+    <script>
+        // Initialize Icons
+        lucide.createIcons();
+
+        // Update active link styling
+        const originalSwitchView = switchView;
+        switchView = function(view) {
+            originalSwitchView(view);
+            
+            // Reset all
+            document.querySelectorAll('.sidebar-link').forEach(el => {
+                el.classList.remove('active', 'bg-gray-100', 'text-slate-900');
+                el.classList.add('text-gray-600');
+            });
+            
+            // Set active
+            const btn = document.getElementById(`btn-${view}`);
+            if(btn) {
+                btn.classList.add('active', 'bg-gray-100', 'text-slate-900');
+                btn.classList.remove('text-gray-600');
+            }
+        }
+    </script>
+</body>
+</html>

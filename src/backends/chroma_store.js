@@ -15,11 +15,22 @@ class ChromaVectorStore extends VectorStore {
         }
     }
 
+    _cleanMetadata(meta) {
+        if (!meta) return {};
+        const out = {};
+        for (const [k, v] of Object.entries(meta)) {
+            if (v !== undefined && v !== null) {
+                out[k] = v;
+            }
+        }
+        return out;
+    }
+
     async addDocuments(docs) {
         await this._init();
         const ids = docs.map((d) => d.id || uuidv4());
         const embeddings = docs.map(d => d.embedding);
-        const metadatas = docs.map(d => d.metadata);
+        const metadatas = docs.map(d => this._cleanMetadata(d.metadata));
         const documents = docs.map(d => d.content);
 
         await this.collection.add({
@@ -34,7 +45,7 @@ class ChromaVectorStore extends VectorStore {
         await this._init();
         const ids = docs.map((d) => d.id || uuidv4());
         const embeddings = docs.map(d => d.embedding);
-        const metadatas = docs.map(d => d.metadata);
+        const metadatas = docs.map(d => this._cleanMetadata(d.metadata));
         const documents = docs.map(d => d.content);
         if (typeof this.collection.upsert === 'function') {
             await this.collection.upsert({ ids, embeddings, metadatas, documents });

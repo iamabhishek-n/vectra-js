@@ -16,12 +16,20 @@ const { LLMReranker } = require('./reranker');
 const { InMemoryHistory, RedisHistory, PostgresHistory } = require('./memory');
 const { OllamaBackend } = require('./backends/ollama');
 const { v5: uuidv5 } = require('uuid');
+const { v4: uuidv4 } = require('uuid');
+const SQLiteLogger = require('./observability');
 
 class VectraClient {
   constructor(config) {
     const parsed = RAGConfigSchema.parse(config);
     this.config = parsed;
     this.callbacks = config.callbacks || [];
+    
+    // Initialize observability
+    this.logger = (this.config.observability && this.config.observability.enabled) 
+      ? new SQLiteLogger(this.config.observability) 
+      : null;
+
     // Initialize processor
     const agenticLlm = (this.config.chunking && this.config.chunking.agenticLlm)
         ? this.createLLM(this.config.chunking.agenticLlm)
@@ -128,6 +136,12 @@ class VectraClient {
   }
 
   async ingestDocuments(filePath) {
+    const traceId = uuidv4();
+    const rootSpanId = uuidv4();
+    const tStart = Date.now();
+    const provider = this.config.embedding.provider;
+    const modelName = this.config.embedding.modelName;
+    
     try {
       const stats = await fs.promises.stat(filePath);
 
@@ -292,8 +306,35 @@ class VectraClient {
       }
       const durationMs = Date.now() - t0;
       this.trigger('onIngestEnd', filePath, chunks.length, durationMs);
+      
+      this.logger.logTrace({
+        traceId,
+        spanId: rootSpanId,
+        name: 'ingestDocuments',
+        startTime: tStart,
+        endTime: Date.now(),
+        input: { filePath },
+        output: { chunks: chunks.length, durationMs },
+        attributes: { fileSize: size },
+        provider,
+        modelName
+      });
+      this.logger.logMetric({ name: 'ingest_latency', value: durationMs, tags: { type: 'single_file' } });
+
     } catch (e) {
       this.trigger('onError', e);
+      this.logger.logTrace({
+        traceId,
+        spanId: rootSpanId,
+        name: 'ingestDocuments',
+        startTime: tStart,
+        endTime: Date.now(),
+        input: { filePath },
+        error: { message: e.message },
+        status: 'error',
+        provider,
+        modelName
+      });
       throw e;
     }
   }
@@ -459,6 +500,17 @@ class VectraClient {
   }
 
   async queryRAG(query, filter = null, stream = false, sessionId = null) {
+    const traceId = uuidv4();
+    const rootSpanId = uuidv4();
+    const tStart = Date.now();
+    
+    if (sessionId) {
+        this.logger.updateSession(sessionId, null, { lastQuery: query });
+    }
+
+    const provider = this.config.llm.provider;
+    const modelName = this.config.llm.modelName;
+
     try {
         const tRetrieval = Date.now();
         this.trigger('onRetrievalStart', query);
@@ -505,6 +557,18 @@ class VectraClient {
 
         const retrievalMs = Date.now() - tRetrieval;
         this.trigger('onRetrievalEnd', docs.length, retrievalMs);
+        
+        this.logger.logTrace({
+            traceId,
+            spanId: uuidv4(),
+            parentSpanId: rootSpanId,
+            name: 'retrieval',
+            startTime: tRetrieval,
+            endTime: Date.now(),
+            input: { query, filter, strategy },
+            output: { documentsFound: docs.length }
+        });
+
         const terms = query.toLowerCase().split(/\W+/).filter(t=>t.length>2);
         docs = docs.map(d => {
           const kws = Array.isArray(d.metadata?.keywords) ? d.metadata.keywords.map(k=>String(k).toLowerCase()) : [];
@@ -547,7 +611,89 @@ class VectraClient {
         if (stream) {
             // Streaming return
             if (!this.llm.generateStream) throw new Error("Streaming not implemented for this provider");
-            return this.llm.generateStream(prompt, systemInst);
+            
+            this.logger.logTrace({
+                traceId,
+                spanId: uuidv4(),
+                parentSpanId: rootSpanId,
+                name: 'generation_stream_start',
+                startTime: tGen,
+                endTime: Date.now(),
+                input: { prompt },
+                output: { stream: true },
+                provider,
+                modelName
+            });
+
+            const originalStream = await this.llm.generateStream(prompt, systemInst);
+            const self = this;
+            
+            async function* wrappedStream() {
+                let fullAnswer = '';
+                try {
+                    for await (const chunk of originalStream) {
+                        const delta = (chunk && chunk.delta) ? chunk.delta : (typeof chunk === 'string' ? chunk : '');
+                        fullAnswer += delta;
+                        yield chunk;
+                    }
+                } catch (e) {
+                    self.trigger('onError', e);
+                     self.logger.logTrace({
+                        traceId,
+                        spanId: rootSpanId,
+                        name: 'queryRAG',
+                        startTime: tStart,
+                        endTime: Date.now(),
+                        input: { query, sessionId },
+                        error: { message: e.message, stack: e.stack },
+                        status: 'error'
+                      });
+                    throw e;
+                }
+
+                // Stream finished successfully
+                const genMs = Date.now() - tGen;
+                self.trigger('onGenerationEnd', fullAnswer, genMs);
+
+                const promptChars = prompt.length;
+                const answerChars = fullAnswer.length;
+
+                self.logger.logTrace({
+                    traceId,
+                    spanId: uuidv4(),
+                    parentSpanId: rootSpanId,
+                    name: 'generation',
+                    startTime: tGen,
+                    endTime: Date.now(),
+                    input: { prompt },
+                    output: { answer: fullAnswer.substring(0, 1000) }, 
+                    attributes: { prompt_chars: promptChars, completion_chars: answerChars },
+                    provider,
+                    modelName
+                });
+
+                self.logger.logMetric({ name: 'prompt_chars', value: promptChars });
+                self.logger.logMetric({ name: 'completion_chars', value: answerChars });
+
+                self.logger.logTrace({
+                    traceId,
+                    spanId: rootSpanId,
+                    name: 'queryRAG',
+                    startTime: tStart,
+                    endTime: Date.now(),
+                    input: { query, sessionId },
+                    output: { success: true },
+                    attributes: { retrievalMs, genMs, docCount: docs.length },
+                    provider,
+                    modelName
+                });
+                
+                self.logger.logMetric({ name: 'query_latency', value: Date.now() - tStart, tags: { type: 'total' } });
+                self.logger.logMetric({ name: 'retrieval_latency', value: retrievalMs, tags: { type: 'retrieval' } });
+                self.logger.logMetric({ name: 'generation_latency', value: genMs, tags: { type: 'generation' } });
+            }
+
+            return wrappedStream();
         } else {
             const answer = await this.llm.generate(prompt, systemInst);
             if (this.history && sessionId) {
@@ -561,6 +707,44 @@ class VectraClient {
             }
             const genMs = Date.now() - tGen;
             this.trigger('onGenerationEnd', answer, genMs);
+
+            const promptChars = prompt.length;
+            const answerChars = answer ? String(answer).length : 0;
+
+            this.logger.logTrace({
+                traceId,
+                spanId: uuidv4(),
+                parentSpanId: rootSpanId,
+                name: 'generation',
+                startTime: tGen,
+                endTime: Date.now(),
+                input: { prompt },
+                output: { answer: String(answer).substring(0, 1000) }, // Truncate for log
+                attributes: { prompt_chars: promptChars, completion_chars: answerChars },
+                provider,
+                modelName
+            });
+
+            this.logger.logMetric({ name: 'prompt_chars', value: promptChars });
+            this.logger.logMetric({ name: 'completion_chars', value: answerChars });
+
+            this.logger.logTrace({
+                traceId,
+                spanId: rootSpanId,
+                name: 'queryRAG',
+                startTime: tStart,
+                endTime: Date.now(),
+                input: { query, sessionId },
+                output: { success: true },
+                attributes: { retrievalMs, genMs, docCount: docs.length },
+                provider,
+                modelName
+            });
+            
+            this.logger.logMetric({ name: 'query_latency', value: Date.now() - tStart, tags: { type: 'total' } });
+            this.logger.logMetric({ name: 'retrieval_latency', value: retrievalMs, tags: { type: 'retrieval' } });
+            this.logger.logMetric({ name: 'generation_latency', value: genMs, tags: { type: 'generation' } });
+
             if (this.config.generation && this.config.generation.outputFormat === 'json') {
               try { const parsed = JSON.parse(String(answer)); return { answer: parsed, sources: docs.map(d => d.metadata) }; } catch { return { answer, sources: docs.map(d => d.metadata) }; }
             }
@@ -568,6 +752,16 @@ class VectraClient {
         }
     } catch (e) {
       this.trigger('onError', e);
+      this.logger.logTrace({
+        traceId,
+        spanId: rootSpanId,
+        name: 'queryRAG',
+        startTime: tStart,
+        endTime: Date.now(),
+        input: { query, sessionId },
+        error: { message: e.message, stack: e.stack },
+        status: 'error'
+      });
       throw e;
     }
   }

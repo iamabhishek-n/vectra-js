@@ -161,6 +161,13 @@ const config = {
   - `enrichment`: boolean; generate `summary`, `keywords`, `hypothetical_questions`
 - Callbacks
   - `callbacks`: array of handlers; use `LoggingCallbackHandler` or `StructuredLoggingCallbackHandler`
+- Observability
+  - `enabled`: boolean; enable SQLite-based observability (default: false)
+  - `sqlitePath`: string; path to SQLite database file (default: 'vectra-observability.db')
+  - `projectId`: string; project identifier for multi-project support (default: 'default')
+  - `trackMetrics`: boolean; track latency and other metrics
+  - `trackTraces`: boolean; track detailed workflow traces
+  - `sessionTracking`: boolean; track chat sessions
 - Index Helpers (Postgres + Prisma)
   - `ensureIndexes()`: creates ivfflat and GIN FTS indexes and optional `tsvector` trigger
 
@@ -600,6 +607,29 @@ const res = await client.queryRAG('Vacation policy', { docTitle: 'Employee Handb
 const { StructuredLoggingCallbackHandler } = require('vectra-js/src/callbacks');
 const config = { callbacks: [ new StructuredLoggingCallbackHandler() ] };
 ```
+
+### Observability
+
+Built-in SQLite-based observability to track metrics, traces, and sessions.
+
+```javascript
+const config = {
+  // ...
+  observability: {
+    enabled: true,
+    sqlitePath: 'vectra-observability.db',
+    projectId: 'my-project',
+    trackMetrics: true,
+    trackTraces: true,
+    sessionTracking: true
+  }
+};
+```
+
+This tracks:
+- **Metrics**: Latency (ingest, query).
+- **Traces**: Detailed spans for retrieval, generation, and ingestion workflows.
+- **Sessions**: Chat session history and last query tracking.
 
 ### Vector Stores
 - Prisma (Postgres + pgvector), Chroma, Qdrant, Milvus.

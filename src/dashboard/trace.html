@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trace Details - Vectra Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .sidebar-link.active { background-color: #f3f4f6; color: #111827; }
+        .sidebar-link:hover { background-color: #f9fafb; color: #111827; }
+        /* JSON Syntax Highlighting */
+        .json-key { color: #7c3aed; } /* violet-600 */
+        .json-string { color: #059669; } /* emerald-600 */
+        .json-number { color: #d97706; } /* amber-600 */
+        .json-boolean { color: #dc2626; } /* red-600 */
+        .json-null { color: #9ca3af; } /* gray-400 */
+    </style>
+</head>
+<body class="bg-gray-50 text-slate-800 h-screen overflow-hidden flex">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-white border-r border-gray-200 flex-col hidden md:flex">
+        <!-- Logo -->
+        <div class="h-16 flex items-center px-6 border-b border-gray-100">
+            <div class="flex items-center gap-2">
+                <div class="bg-indigo-600 p-1.5 rounded-lg text-white">
+                    <i data-lucide="layers" class="w-5 h-5"></i>
+                </div>
+                <span class="text-xl font-bold text-slate-900 tracking-tight">Vectra</span>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <nav class="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+            <div class="mb-6">
+                <p class="px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Menu</p>
+                <a href="/dashboard/" class="w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-600 sidebar-link group transition-colors">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5 mr-3 text-gray-400 group-hover:text-gray-500"></i>
+                    Dashboard
+                </a>
+                <a href="/dashboard/?view=traces" class="w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg text-slate-900 bg-gray-100 sidebar-link active group transition-colors">
+                    <i data-lucide="activity" class="w-5 h-5 mr-3 text-gray-500"></i>
+                    Traces
+                </a>
+                <a href="/dashboard/?view=sessions" class="w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-600 sidebar-link group transition-colors">
+                    <i data-lucide="users" class="w-5 h-5 mr-3 text-gray-400 group-hover:text-gray-500"></i>
+                    Sessions
+                </a>
+            </div>
+            
+            <div>
+                <p class="px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Management</p>
+                <a href="#" class="w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-600 sidebar-link group transition-colors">
+                    <i data-lucide="settings" class="w-5 h-5 mr-3 text-gray-400 group-hover:text-gray-500"></i>
+                    Settings
+                </a>
+                <a href="#" class="w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-600 sidebar-link group transition-colors">
+                    <i data-lucide="book-open" class="w-5 h-5 mr-3 text-gray-400 group-hover:text-gray-500"></i>
+                    Documentation
+                </a>
+            </div>
+        </nav>
+
+        <!-- User Profile (Bottom) -->
+        <div class="p-4 border-t border-gray-100">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs">
+                    AD
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-gray-900">Admin User</p>
+                    <p class="text-xs text-gray-500">admin@vectra.ai</p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+        
+        <!-- Top Header -->
+        <header class="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 lg:px-8">
+            <div class="flex items-center flex-1">
+                <div class="flex items-center text-sm text-gray-500">
+                    <a href="/dashboard/" class="hover:text-gray-900">Traces</a>
+                    <i data-lucide="chevron-right" class="w-4 h-4 mx-2"></i>
+                    <span class="font-medium text-gray-900" id="header-trace-id">Loading...</span>
+                </div>
+            </div>
+            <div class="ml-4 flex items-center gap-4">
+                <button class="p-2 text-gray-400 hover:text-gray-500">
+                    <i data-lucide="bell" class="w-6 h-6"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Scrollable Area -->
+        <main class="flex-1 overflow-y-auto bg-gray-50 p-6 lg:p-8" id="main-content">
+            
+            <!-- Loading State -->
+            <div id="loading" class="flex flex-col justify-center items-center h-64">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-4"></div>
+                <p class="text-sm text-gray-500">Loading trace details...</p>
+            </div>
+
+            <!-- Trace Content (Hidden initially) -->
+            <div id="trace-content" class="hidden space-y-8 max-w-7xl mx-auto">
+                
+                <!-- Header Card -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                        <div>
+                            <h1 class="text-2xl font-bold text-gray-900 mb-1">Trace Summary</h1>
+                            <div class="flex items-center space-x-6 text-sm text-gray-500">
+                                <span class="flex items-center"><i data-lucide="calendar" class="w-4 h-4 mr-2 text-gray-400"></i> <span id="trace-timestamp">-</span></span>
+                                <span class="flex items-center"><i data-lucide="clock" class="w-4 h-4 mr-2 text-gray-400"></i> <span id="trace-duration">-</span></span>
+                                <span class="flex items-center"><i data-lucide="cpu" class="w-4 h-4 mr-2 text-gray-400"></i> <span id="trace-model">-</span></span>
+                            </div>
+                        </div>
+                        <div id="trace-status" class="px-4 py-1.5 rounded-full text-sm font-semibold bg-gray-100 text-gray-600 border border-gray-200">
+                            Unknown
+                        </div>
+                    </div>
+
+                    <!-- Timeline / Gantt -->
+                    <div class="border-t border-gray-100 pt-6">
+                        <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Execution Timeline</h3>
+                        <div id="timeline-container" class="space-y-3 relative">
+                            <!-- Spans injected here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detailed Spans List -->
+                <div class="space-y-6">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-lg font-bold text-gray-900">Span Details</h3>
+                        <div class="text-sm text-gray-500">Detailed breakdown of operations</div>
+                    </div>
+                    <div id="spans-list" class="space-y-6">
+                        <!-- Span Cards injected here -->
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <script src="trace-script.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

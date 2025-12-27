@@ -114,6 +114,15 @@ const RAGConfigSchema = z.object({
   prompts: z.object({ query: z.string().optional(), reranking: z.string().optional() }).optional(),
   tracing: z.object({ enable: z.boolean().default(false) }).optional(),
   callbacks: z.array(z.custom((val) => true)).optional(), 
+  observability: z.object({
+    enabled: z.boolean().default(false),
+    sqlitePath: z.string().default('vectra-observability.db'),
+    projectId: z.string().default('default'),
+    trackMetrics: z.boolean().default(true),
+    trackTraces: z.boolean().default(true),
+    trackLogs: z.boolean().default(true),
+    sessionTracking: z.boolean().default(true)
+  }).default({})
 });
 
 module.exports = {
