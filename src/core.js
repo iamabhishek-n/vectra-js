@@ -510,6 +510,8 @@ class VectraClient {
 
     const provider = this.config.llm.provider;
     const modelName = this.config.llm.modelName;
+    const embeddingProvider = this.config.embedding.provider;
+    const embeddingModelName = this.config.embedding.modelName;
 
     try {
         const tRetrieval = Date.now();
@@ -566,7 +568,9 @@ class VectraClient {
             startTime: tRetrieval,
             endTime: Date.now(),
             input: { query, filter, strategy },
-            output: { documentsFound: docs.length }
+            output: { documentsFound: docs.length },
+            provider: embeddingProvider,
+            modelName: embeddingModelName
         });
 
         const terms = query.toLowerCase().split(/\W+/).filter(t=>t.length>2);
@@ -646,7 +650,9 @@ class VectraClient {
                         endTime: Date.now(),
                         input: { query, sessionId },
                         error: { message: e.message, stack: e.stack },
-                        status: 'error'
+                        status: 'error',
+                        provider,
+                        modelName
                       });
                     throw e;
                 }
@@ -760,7 +766,9 @@ class VectraClient {
         endTime: Date.now(),
         input: { query, sessionId },
         error: { message: e.message, stack: e.stack },
-        status: 'error'
+        status: 'error',
+        provider,
+        modelName
       });
       throw e;
     }
