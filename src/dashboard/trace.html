@@ -5,129 +5,201 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Trace Details - Vectra Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f5f3ff',
+                            100: '#ede9fe',
+                            200: '#ddd6fe',
+                            300: '#c4b5fd',
+                            400: '#a78bfa',
+                            500: '#8b5cf6',
+                            600: '#7c3aed',
+                            700: '#6d28d9',
+                            800: '#5b21b6',
+                            900: '#4c1d95',
+                            950: '#2e1065',
+                        },
+                        dark: {
+                            950: '#020204',
+                            900: '#08080C',
+                            850: '#0F0F16',
+                            800: '#14141F',
+                            700: '#1C1C2E',
+                        }
+                    }
+                }
+            }
+        }
+
+        // Check for saved theme preference or use system preference
+        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; }
         .sidebar-link.active { background-color: #f3f4f6; color: #111827; }
+        .dark .sidebar-link.active { background-color: rgba(255, 255, 255, 0.1); color: #ffffff; }
         .sidebar-link:hover { background-color: #f9fafb; color: #111827; }
+        .dark .sidebar-link:hover { background-color: rgba(255, 255, 255, 0.05); color: #ffffff; }
+        
         /* JSON Syntax Highlighting */
         .json-key { color: #7c3aed; } /* violet-600 */
+        .dark .json-key { color: #a78bfa; } /* violet-400 */
         .json-string { color: #059669; } /* emerald-600 */
+        .dark .json-string { color: #34d399; } /* emerald-400 */
         .json-number { color: #d97706; } /* amber-600 */
+        .dark .json-number { color: #fbbf24; } /* amber-400 */
         .json-boolean { color: #dc2626; } /* red-600 */
+        .dark .json-boolean { color: #f87171; } /* red-400 */
         .json-null { color: #9ca3af; } /* gray-400 */
+        .dark .json-null { color: #9ca3af; } /* gray-400 */
+
+        /* Custom scrollbar for dark mode compatibility */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: #334155;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        .dark ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
     </style>
 </head>
-<body class="bg-gray-50 text-slate-800 h-screen overflow-hidden flex">
+<body class="bg-gray-50 text-slate-800 dark:bg-dark-950 dark:text-white h-screen overflow-hidden flex transition-colors duration-200">
 
     <!-- Sidebar -->
-    <aside class="w-64 bg-white border-r border-gray-200 flex-col hidden md:flex">
+    <aside class="w-64 bg-white border-r border-gray-200 dark:bg-dark-900 dark:border-white/5 flex-col hidden md:flex transition-colors duration-200">
         <!-- Logo -->
-        <div class="h-16 flex items-center px-6 border-b border-gray-100">
+        <div class="h-16 flex items-center px-6 border-b border-gray-100 dark:border-white/5">
             <div class="flex items-center gap-2">
-                <div class="bg-indigo-600 p-1.5 rounded-lg text-white">
+                <div class="bg-brand-600 p-1.5 rounded-lg text-white">
                     <i data-lucide="layers" class="w-5 h-5"></i>
                 </div>
-                <span class="text-xl font-bold text-slate-900 tracking-tight">Vectra</span>
+                <span class="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Vectra</span>
             </div>
         </div>
 
         <!-- Navigation -->
         <nav class="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
             <div class="mb-6">
-                <p class="px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Menu</p>
-                <a href="/dashboard/" class="w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-600 sidebar-link group transition-colors">
-                    <i data-lucide="layout-dashboard" class="w-5 h-5 mr-3 text-gray-400 group-hover:text-gray-500"></i>
+                <p class="px-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Menu</p>
+                <a href="/dashboard/" class="w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-600 dark:text-gray-400 sidebar-link group transition-colors">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5 mr-3 text-gray-400 dark:text-gray-500 group-hover:text-gray-500 dark:group-hover:text-gray-300"></i>
                     Dashboard
                 </a>
-                <a href="/dashboard/?view=traces" class="w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg text-slate-900 bg-gray-100 sidebar-link active group transition-colors">
-                    <i data-lucide="activity" class="w-5 h-5 mr-3 text-gray-500"></i>
+                <a href="/dashboard/?view=traces" class="w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg text-slate-900 dark:text-white bg-gray-100 dark:bg-white/10 sidebar-link active group transition-colors">
+                    <i data-lucide="activity" class="w-5 h-5 mr-3 text-gray-500 dark:text-gray-400"></i>
                     Traces
                 </a>
-                <a href="/dashboard/?view=sessions" class="w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-600 sidebar-link group transition-colors">
-                    <i data-lucide="users" class="w-5 h-5 mr-3 text-gray-400 group-hover:text-gray-500"></i>
+                <a href="/dashboard/?view=sessions" class="w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-600 dark:text-gray-400 sidebar-link group transition-colors">
+                    <i data-lucide="users" class="w-5 h-5 mr-3 text-gray-400 dark:text-gray-500 group-hover:text-gray-500 dark:group-hover:text-gray-300"></i>
                     Sessions
                 </a>
             </div>
             
             <div>
-                <p class="px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Management</p>
-                <a href="#" class="w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-600 sidebar-link group transition-colors">
-                    <i data-lucide="settings" class="w-5 h-5 mr-3 text-gray-400 group-hover:text-gray-500"></i>
+                <p class="px-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Management</p>
+                <a href="#" class="w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-600 dark:text-gray-400 sidebar-link group transition-colors">
+                    <i data-lucide="settings" class="w-5 h-5 mr-3 text-gray-400 dark:text-gray-500 group-hover:text-gray-500 dark:group-hover:text-gray-300"></i>
                     Settings
                 </a>
-                <a href="#" class="w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-600 sidebar-link group transition-colors">
-                    <i data-lucide="book-open" class="w-5 h-5 mr-3 text-gray-400 group-hover:text-gray-500"></i>
+                <a href="#" class="w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-600 dark:text-gray-400 sidebar-link group transition-colors">
+                    <i data-lucide="book-open" class="w-5 h-5 mr-3 text-gray-400 dark:text-gray-500 group-hover:text-gray-500 dark:group-hover:text-gray-300"></i>
                     Documentation
                 </a>
             </div>
         </nav>
 
         <!-- User Profile (Bottom) -->
-        <div class="p-4 border-t border-gray-100">
+        <div class="p-4 border-t border-gray-100 dark:border-white/5">
             <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs">
+                <div class="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-900/50 flex items-center justify-center text-brand-600 dark:text-brand-400 font-bold text-xs border border-brand-200 dark:border-brand-500/20">
                     AD
                 </div>
                 <div>
-                    <p class="text-sm font-medium text-gray-900">Admin User</p>
+                    <p class="text-sm font-medium text-gray-900 dark:text-white">Admin User</p>
                     <p class="text-xs text-gray-500">admin@vectra.ai</p>
                 </div>
+                <button onclick="toggleTheme()" class="ml-auto p-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition-colors">
+                     <i data-lucide="moon" class="w-4 h-4 hidden dark:block"></i>
+                     <i data-lucide="sun" class="w-4 h-4 block dark:hidden"></i>
+                </button>
             </div>
         </div>
     </aside>
 
     <!-- Main Content -->
-    <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+    <div class="flex-1 flex flex-col min-w-0 overflow-hidden bg-gray-50 dark:bg-dark-950 transition-colors duration-200">
         
         <!-- Top Header -->
-        <header class="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 lg:px-8">
+        <header class="bg-white dark:bg-dark-900 border-b border-gray-200 dark:border-white/5 h-16 flex items-center justify-between px-6 lg:px-8 transition-colors duration-200">
             <div class="flex items-center flex-1">
-                <div class="flex items-center text-sm text-gray-500">
-                    <a href="/dashboard/" class="hover:text-gray-900">Traces</a>
+                <div class="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                    <a href="/dashboard/" class="hover:text-gray-900 dark:hover:text-white transition-colors">Traces</a>
                     <i data-lucide="chevron-right" class="w-4 h-4 mx-2"></i>
-                    <span class="font-medium text-gray-900" id="header-trace-id">Loading...</span>
+                    <span class="font-medium text-gray-900 dark:text-white" id="header-trace-id">Loading...</span>
                 </div>
             </div>
             <div class="ml-4 flex items-center gap-4">
-                <button class="p-2 text-gray-400 hover:text-gray-500">
+                <button class="p-2 text-gray-400 hover:text-gray-500 dark:hover:text-white transition-colors">
                     <i data-lucide="bell" class="w-6 h-6"></i>
                 </button>
             </div>
         </header>
 
         <!-- Main Scrollable Area -->
-        <main class="flex-1 overflow-y-auto bg-gray-50 p-6 lg:p-8" id="main-content">
+        <main class="flex-1 overflow-y-auto p-6 lg:p-8" id="main-content">
             
             <!-- Loading State -->
             <div id="loading" class="flex flex-col justify-center items-center h-64">
-                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-4"></div>
-                <p class="text-sm text-gray-500">Loading trace details...</p>
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600 dark:border-brand-500 mb-4"></div>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Loading trace details...</p>
             </div>
 
             <!-- Trace Content (Hidden initially) -->
             <div id="trace-content" class="hidden space-y-8 max-w-7xl mx-auto">
                 
                 <!-- Header Card -->
-                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <div class="bg-white dark:bg-dark-900 rounded-xl shadow-sm border border-gray-100 dark:border-white/5 p-6 transition-colors duration-200">
                     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                         <div>
-                            <h1 class="text-2xl font-bold text-gray-900 mb-1">Trace Summary</h1>
-                            <div class="flex items-center space-x-6 text-sm text-gray-500">
-                                <span class="flex items-center"><i data-lucide="calendar" class="w-4 h-4 mr-2 text-gray-400"></i> <span id="trace-timestamp">-</span></span>
-                                <span class="flex items-center"><i data-lucide="clock" class="w-4 h-4 mr-2 text-gray-400"></i> <span id="trace-duration">-</span></span>
-                                <span class="flex items-center"><i data-lucide="cpu" class="w-4 h-4 mr-2 text-gray-400"></i> <span id="trace-model">-</span></span>
+                            <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-1">Trace Summary</h1>
+                            <div class="flex items-center space-x-6 text-sm text-gray-500 dark:text-gray-400">
+                                <span class="flex items-center"><i data-lucide="calendar" class="w-4 h-4 mr-2 text-gray-400 dark:text-gray-500"></i> <span id="trace-timestamp">-</span></span>
+                                <span class="flex items-center"><i data-lucide="clock" class="w-4 h-4 mr-2 text-gray-400 dark:text-gray-500"></i> <span id="trace-duration">-</span></span>
+                                <span class="flex items-center"><i data-lucide="cpu" class="w-4 h-4 mr-2 text-gray-400 dark:text-gray-500"></i> <span id="trace-model">-</span></span>
                             </div>
                         </div>
-                        <div id="trace-status" class="px-4 py-1.5 rounded-full text-sm font-semibold bg-gray-100 text-gray-600 border border-gray-200">
+                        <div id="trace-status" class="px-4 py-1.5 rounded-full text-sm font-semibold bg-gray-100 text-gray-600 border border-gray-200 dark:bg-white/10 dark:text-gray-300 dark:border-white/10">
                             Unknown
                         </div>
                     </div>
 
                     <!-- Timeline / Gantt -->
-                    <div class="border-t border-gray-100 pt-6">
-                        <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Execution Timeline</h3>
+                    <div class="border-t border-gray-100 dark:border-white/5 pt-6">
+                        <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">Execution Timeline</h3>
                         <div id="timeline-container" class="space-y-3 relative">
                             <!-- Spans injected here -->
                         </div>
@@ -137,8 +209,8 @@
                 <!-- Detailed Spans List -->
                 <div class="space-y-6">
                     <div class="flex items-center justify-between">
-                        <h3 class="text-lg font-bold text-gray-900">Span Details</h3>
-                        <div class="text-sm text-gray-500">Detailed breakdown of operations</div>
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white">Span Details</h3>
+                        <div class="text-sm text-gray-500 dark:text-gray-400">Detailed breakdown of operations</div>
                     </div>
                     <div id="spans-list" class="space-y-6">
                         <!-- Span Cards injected here -->
@@ -152,6 +224,16 @@
     <script src="trace-script.js"></script>
     <script>
         lucide.createIcons();
+
+        function toggleTheme() {
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('color-theme', 'light');
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('color-theme', 'dark');
+            }
+        }
     </script>
 </body>
 </html>

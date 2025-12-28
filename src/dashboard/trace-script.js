@@ -52,10 +52,10 @@ function renderTrace(trace) {
     const hasError = trace.some(s => s.error && s.error !== '{}');
     const statusEl = document.getElementById('trace-status');
     if (hasError) {
-        statusEl.className = 'px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-700';
+        statusEl.className = 'px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
         statusEl.textContent = 'Error';
     } else {
-        statusEl.className = 'px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-700';
+        statusEl.className = 'px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
         statusEl.textContent = 'Success';
     }
 
@@ -70,15 +70,15 @@ function renderTrace(trace) {
         const row = document.createElement('div');
         row.className = 'relative group h-8 flex items-center';
         row.innerHTML = `
-            <div class="w-1/4 min-w-[150px] text-xs font-medium text-slate-600 truncate pr-4" title="${span.name}">
+            <div class="w-1/4 min-w-[150px] text-xs font-medium text-slate-600 dark:text-slate-400 truncate pr-4" title="${span.name}">
                 ${span.name}
             </div>
             <div class="flex-1 h-full relative">
-                <div class="absolute top-1/2 -translate-y-1/2 h-4 bg-indigo-500/20 rounded-sm border border-indigo-500/40 hover:bg-indigo-500/40 transition-colors cursor-pointer"
+                <div class="absolute top-1/2 -translate-y-1/2 h-4 bg-brand-500/20 dark:bg-brand-500/10 rounded-sm border border-brand-500/40 dark:border-brand-500/20 hover:bg-brand-500/40 dark:hover:bg-brand-500/30 transition-colors cursor-pointer"
                      style="left: ${left}%; width: ${width}%"
                      onclick="scrollToSpan('${span.span_id}')">
                 </div>
-                <div class="absolute top-1/2 -translate-y-1/2 text-[10px] text-slate-400 ml-2 pointer-events-none" style="left: ${left + width}%">
+                <div class="absolute top-1/2 -translate-y-1/2 text-[10px] text-slate-400 dark:text-slate-500 ml-2 pointer-events-none" style="left: ${left + width}%">
                     ${span.end_time - span.start_time}ms
                 </div>
             </div>
@@ -93,20 +93,20 @@ function renderTrace(trace) {
     trace.forEach(span => {
         const card = document.createElement('div');
         card.id = `span-${span.span_id}`;
-        card.className = 'bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden';
+        card.className = 'bg-white dark:bg-dark-900 rounded-lg border border-slate-200 dark:border-white/5 shadow-sm overflow-hidden transition-colors duration-200';
         
         const isError = span.error && span.error !== '{}';
-        const borderColor = isError ? 'border-l-4 border-l-red-500' : 'border-l-4 border-l-indigo-500';
+        const borderColor = isError ? 'border-l-4 border-l-red-500' : 'border-l-4 border-l-brand-500';
         
         card.innerHTML = `
-            <div class="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center ${borderColor}">
+            <div class="px-6 py-4 bg-slate-50 dark:bg-white/5 border-b border-slate-100 dark:border-white/5 flex justify-between items-center ${borderColor}">
                 <div>
-                    <h4 class="text-sm font-bold text-slate-900 font-mono">${span.name}</h4>
-                    <div class="text-xs text-slate-500 mt-1 font-mono">${span.span_id}</div>
+                    <h4 class="text-sm font-bold text-slate-900 dark:text-white font-mono">${span.name}</h4>
+                    <div class="text-xs text-slate-500 dark:text-slate-400 mt-1 font-mono">${span.span_id}</div>
                 </div>
                 <div class="text-right">
-                    <div class="text-sm font-semibold text-slate-700">${span.end_time - span.start_time}ms</div>
-                    <div class="text-xs text-slate-400">${new Date(span.start_time).toLocaleTimeString()}</div>
+                    <div class="text-sm font-semibold text-slate-700 dark:text-slate-200">${span.end_time - span.start_time}ms</div>
+                    <div class="text-xs text-slate-400 dark:text-slate-500">${new Date(span.start_time).toLocaleTimeString()}</div>
                 </div>
             </div>
             <div class="p-6 space-y-4">
@@ -139,12 +139,12 @@ function renderJSONSection(title, data, isError = false) {
     if (Object.keys(parsed).length === 0) return '';
 
     const jsonHtml = syntaxHighlight(parsed);
-    const bgClass = isError ? 'bg-red-50' : 'bg-slate-900';
-    const textClass = isError ? 'text-red-900' : 'text-slate-50';
+    const bgClass = isError ? 'bg-red-50 dark:bg-red-900/10' : 'bg-slate-900 dark:bg-black';
+    const textClass = isError ? 'text-red-900 dark:text-red-200' : 'text-slate-50 dark:text-slate-300';
 
     return `
         <div>
-            <h5 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">${title}</h5>
+            <h5 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">${title}</h5>
             <div class="${bgClass} rounded-lg p-4 overflow-x-auto">
                 <pre class="text-xs font-mono ${textClass}"><code>${jsonHtml}</code></pre>
             </div>
@@ -178,7 +178,7 @@ function scrollToSpan(spanId) {
     const el = document.getElementById(`span-${spanId}`);
     if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.classList.add('ring-2', 'ring-indigo-500', 'ring-offset-2');
-        setTimeout(() => el.classList.remove('ring-2', 'ring-indigo-500', 'ring-offset-2'), 2000);
+        el.classList.add('ring-2', 'ring-brand-500', 'ring-offset-2');
+        setTimeout(() => el.classList.remove('ring-2', 'ring-brand-500', 'ring-offset-2'), 2000);
     }
 }

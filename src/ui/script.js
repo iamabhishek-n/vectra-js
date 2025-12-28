@@ -1,4 +1,50 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // --- Dark Mode Logic ---
+    const themeToggleBtn = document.getElementById('theme-toggle');
+    const darkIcon = document.getElementById('theme-toggle-dark-icon');
+    const lightIcon = document.getElementById('theme-toggle-light-icon');
+
+    // Initial State
+    if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark');
+        if (lightIcon) lightIcon.classList.remove('hidden');
+    } else {
+        document.documentElement.classList.remove('dark');
+        if (darkIcon) darkIcon.classList.remove('hidden');
+    }
+
+    // Toggle Event
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', () => {
+            // Toggle icons
+            if (darkIcon) darkIcon.classList.toggle('hidden');
+            if (lightIcon) lightIcon.classList.toggle('hidden');
+
+            // If is set in local storage
+            if (localStorage.getItem('color-theme')) {
+                if (localStorage.getItem('color-theme') === 'light') {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('color-theme', 'dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('color-theme', 'light');
+                }
+            } else {
+                // If not in local storage
+                if (document.documentElement.classList.contains('dark')) {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('color-theme', 'light');
+                } else {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('color-theme', 'dark');
+                }
+            }
+            
+            // Trigger preview update
+            if (typeof updatePreview === 'function') updatePreview();
+        });
+    }
+
     // --- Navigation Logic (Smooth Scrolling & Scroll Spy) ---
     const links = document.querySelectorAll('.nav-item');
     const sections = document.querySelectorAll('section');
@@ -60,13 +106,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateSidebarState(currentId) {
         links.forEach(link => {
-            link.classList.remove('bg-indigo-50', 'text-indigo-600', 'active', 'border-l-4', 'border-indigo-600');
+            link.classList.remove('bg-brand-50', 'text-brand-600', 'active', 'border-l-4', 'border-brand-600');
             link.classList.add('text-gray-600', 'hover:bg-gray-50');
             
             // We use a slight visual indicator for active state
             if (link.getAttribute('data-target') === currentId) {
                 link.classList.remove('text-gray-600', 'hover:bg-gray-50');
-                link.classList.add('bg-indigo-50', 'text-indigo-600', 'active');
+                link.classList.add('bg-brand-50', 'text-brand-600', 'active');
             }
         });
     }
@@ -138,8 +184,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const row = document.createElement('div');
         row.className = 'flex items-center space-x-2 header-row';
         row.innerHTML = `
-            <input type="text" placeholder="Key" value="${key}" class="header-key block w-1/2 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border">
-            <input type="text" placeholder="Value" value="${value}" class="header-value block w-1/2 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border">
+            <input type="text" placeholder="Key" value="${key}" class="header-key block w-1/2 rounded-md border-gray-300 dark:border-white/10 bg-white dark:bg-dark-950 text-slate-900 dark:text-white shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm py-2 px-3 border">
+            <input type="text" placeholder="Value" value="${value}" class="header-value block w-1/2 rounded-md border-gray-300 dark:border-white/10 bg-white dark:bg-dark-950 text-slate-900 dark:text-white shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm py-2 px-3 border">
             <button type="button" class="remove-header p-2 text-gray-400 hover:text-red-500">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
             </button>
@@ -308,12 +354,15 @@ function setBackend(type) {
     const btnNode = document.getElementById('backend-node');
     const btnPython = document.getElementById('backend-python');
     
+    const activeClass = 'px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 text-brand-600 dark:text-brand-400 bg-white dark:bg-brand-900/20 shadow-sm';
+    const inactiveClass = 'px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white';
+    
     if (isPythonBackend) {
-        btnPython.className = 'px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 text-indigo-600 bg-indigo-50 shadow-sm';
-        btnNode.className = 'px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 text-gray-500 hover:text-gray-900';
+        btnPython.className = activeClass;
+        btnNode.className = inactiveClass;
     } else {
-        btnNode.className = 'px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 text-indigo-600 bg-indigo-50 shadow-sm';
-        btnPython.className = 'px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 text-gray-500 hover:text-gray-900';
+        btnNode.className = activeClass;
+        btnPython.className = inactiveClass;
     }
     
     updatePreview();
@@ -447,8 +496,8 @@ function addHeaderRow(key = '', value = '') {
     const row = document.createElement('div');
     row.className = 'flex items-center space-x-2 header-row mb-2';
     row.innerHTML = `
-        <input type="text" placeholder="Key" value="${key}" class="header-key block w-1/2 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border">
-        <input type="text" placeholder="Value" value="${value}" class="header-value block w-1/2 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border">
+        <input type="text" placeholder="Key" value="${key}" class="header-key block w-1/2 rounded-md border-white/10 bg-dark-950 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border">
+        <input type="text" placeholder="Value" value="${value}" class="header-value block w-1/2 rounded-md border-white/10 bg-dark-950 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border">
         <button type="button" class="remove-header p-2 text-gray-400 hover:text-red-500 transition-colors">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
         </button>

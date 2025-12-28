@@ -79,7 +79,7 @@ body {
 }
 
 .nav-item.active {
-    background-color: #eef2ff;
+    background-color: #f5f3ff;
     color: var(--primary);
 }
 
@@ -176,7 +176,7 @@ label {
 .form-control:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
     background-color: #fff;
 }
 
