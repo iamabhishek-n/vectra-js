@@ -39,7 +39,7 @@ class DocumentProcessor {
   async process(text) {
     return this.config.strategy === ChunkingStrategy.AGENTIC 
       ? this.agenticSplit(text) 
-      : this.recursiveSplit(text);
+      : this.recursiveSplit(text);  
   }
 
   recursiveSplit(text) {
