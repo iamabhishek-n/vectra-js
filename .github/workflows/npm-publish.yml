@@ -9,7 +9,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
 
-    environment: production   # 👈 MUST match environment name exactly
+    environment: Build
 
     permissions:
       contents: read
