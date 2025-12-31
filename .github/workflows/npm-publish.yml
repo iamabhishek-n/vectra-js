@@ -29,9 +29,9 @@ jobs:
 
       - name: Configure npm authentication
         run: |
-          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+          echo "//registry.npmjs.org/:_authToken=${NPM_KEY}" > ~/.npmrc
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_KEY: ${{ secrets.NPM_KEY }}
 
       - name: Publish to npm
         run: pnpm publish --no-git-checks --access public
