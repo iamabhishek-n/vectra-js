@@ -3,12 +3,12 @@ name: Publish to npm (OIDC)
 on:
   push:
     branches:
-      - master
+      - master   # MUST match Trusted Publisher
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    environment: Build
+    environment: Build   # MUST match exactly
 
     permissions:
       contents: read
@@ -21,14 +21,4 @@ jobs:
         with:
           node-version: 20
 
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9
-
-      - run: pnpm install --frozen-lockfile
-
-      - name: Remove npmrc
-        run: rm -f "$NPM_CONFIG_USERCONFIG"
-
-      - name: Publish with provenance
-        run: npm publish --provenance --access public
+      - run: npm publish --provenance --access public
