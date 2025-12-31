@@ -1,4 +1,4 @@
-name: Publish to npm
+name: Publish to npm (OIDC)
 
 on:
   push:
@@ -28,5 +28,4 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Publish with provenance
-        run: pnpm publish --provenance --access public
+      - run: pnpm publish --provenance --access public
