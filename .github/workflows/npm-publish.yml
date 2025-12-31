@@ -1,14 +1,14 @@
-name: Publish to npm (OIDC)
+name: Publish to npm
 
 on:
   push:
     branches:
-      - master
+      - master   # MUST match npm config
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    environment: Build
+    environment: Build   # MUST match npm config
 
     permissions:
       contents: read
@@ -20,12 +20,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9
-
-      - run: pnpm install --frozen-lockfile
 
       - name: Publish with provenance
         run: npm publish --provenance --access public
