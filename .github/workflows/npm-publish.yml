@@ -3,11 +3,13 @@ name: Publish to npm
 on:
   push:
     branches:
-      - master
+      - main
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+
+    environment: production   # 👈 MUST match environment name exactly
 
     permissions:
       contents: read
@@ -27,11 +29,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Configure npm authentication
+      - name: Configure npm auth
         run: |
-          echo "//registry.npmjs.org/:_authToken=${NPM_KEY}" > ~/.npmrc
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
         env:
-          NPM_KEY: ${{ secrets.NPM_KEY }}
+          NPM_TOKEN: ${{ secrets.NPM_KEY }}
 
       - name: Publish to npm
         run: pnpm publish --no-git-checks --access public
