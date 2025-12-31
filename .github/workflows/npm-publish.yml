@@ -20,7 +20,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          registry-url: https://registry.npmjs.org
 
       - uses: pnpm/action-setup@v3
         with:
@@ -28,4 +27,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: npm publish --provenance --access public
+      - name: Remove npmrc
+        run: rm -f "$NPM_CONFIG_USERCONFIG"
+
+      - name: Publish with provenance
+        run: npm publish --provenance --access public
