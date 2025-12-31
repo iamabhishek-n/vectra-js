@@ -12,6 +12,7 @@ jobs:
 
     permissions:
       contents: read
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
@@ -25,18 +26,7 @@ jobs:
         with:
           version: 9
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile
 
-      - name: Configure npm auth
-        run: |
-          printf "//registry.npmjs.org/:_authToken=%s" "$NODE_AUTH_TOKEN" > "$NPM_CONFIG_USERCONFIG"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_KEY }}
-
-
-      - name: Verify auth (CI check)
-        run: npm whoami
-
-      - name: Publish to npm
-        run: pnpm publish --no-git-checks --access public
+      - name: Publish with provenance
+        run: pnpm publish --provenance --access public
