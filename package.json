@@ -1,6 +1,6 @@
 {
   "name": "vectra-js",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "description": "A production-ready, provider-agnostic Node.js SDK for End-to-End RAG pipelines.",
   "main": "index.js",
   "scripts": {
@@ -8,8 +8,7 @@
     "prisma:generate": "prisma generate",
     "lint": "eslint . --ext .js,.cjs,.mjs",
     "lint:fix": "eslint . --ext .js,.cjs,.mjs --fix",
-    "prepublishOnly": "pnpm run lint",
-    "publish": "npm publish --access public"
+    "prepublishOnly": "pnpm run lint"
   },
   "bin": {
     "vectra": "bin/vectra.js"
