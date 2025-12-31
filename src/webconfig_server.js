@@ -146,7 +146,7 @@ function start(configPath, mode = 'webconfig', port = 8766, openInBrowser = true
               // Using parameterized queries is safer.
               
               let projectFilter = '';
-              let params = [];
+              const params = [];
               
               if (projectId && projectId !== 'all') {
                   projectFilter = 'WHERE project_id = ?';
