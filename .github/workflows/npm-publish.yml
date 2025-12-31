@@ -32,7 +32,7 @@ jobs:
         run: |
           printf "//registry.npmjs.org/:_authToken=%s" "$NPM_TOKEN" > ~/.npmrc
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_KEY }}
 
       - name: Verify auth (CI check)
         run: npm whoami
