@@ -1,25 +1,25 @@
-name: Publish to npm
+name: Publish Package
 
 on:
   push:
     branches:
-      - master   # MUST match npm config
+      - master
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    environment: Build   # MUST match npm config
-
-    permissions:
-      contents: read
-      id-token: write
-
+    environment: Build
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-
-      - name: Publish with provenance
-        run: npm publish --provenance --access public
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm install
+      - run: npm run build --if-present
+      - run: npm publish
