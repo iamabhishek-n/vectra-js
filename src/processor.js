@@ -16,8 +16,38 @@ class DocumentProcessor {
     const ext = path.extname(filePath).toLowerCase();
     const buffer = await fs.promises.readFile(filePath);
     if (ext === '.pdf') {
+      let PDFParse = pdf.PDFParse;
+      if (!PDFParse && pdf.default && pdf.default.PDFParse) {
+        PDFParse = pdf.default.PDFParse;
+      }
+
+      if (PDFParse) {
+        // Handle pdf-parse v2
+        const parser = new PDFParse({ data: buffer });
+        const info = await parser.getInfo();
+        const total = info.total;
+        const pages = [];
+        let fullText = '';
+
+        for (let i = 1; i <= total; i++) {
+          const pageRes = await parser.getText({ partial: [i] });
+          const pageText = pageRes.text || '';
+          pages.push(pageText);
+          fullText += pageText + '\n'; 
+        }
+        await parser.destroy();
+        this._lastPages = pages;
+        return fullText;
+      }
+
+      // Fallback for v1 (or if PDFParse class not found)
+      let pdfFunc = pdf;
+      if (typeof pdfFunc !== 'function' && pdfFunc.default) {
+        pdfFunc = pdfFunc.default;
+      }
+      
       const pages = [];
-      const res = await pdf(buffer, {
+      const res = await pdfFunc(buffer, {
         pagerender: pageData => pageData.getTextContent().then(tc => {
           const s = tc.items.map(it => it.str).join(' ');
           pages.push(s);

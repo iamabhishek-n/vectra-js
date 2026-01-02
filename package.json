@@ -1,6 +1,6 @@
 {
   "name": "vectra-js",
-  "version": "0.9.6",
+  "version": "0.9.7",
   "description": "A production-ready, provider-agnostic Node.js SDK for End-to-End RAG pipelines.",
   "main": "index.js",
   "scripts": {
@@ -40,6 +40,7 @@
     "mammoth": "^1.11.0",
     "openai": "^6.15.0",
     "pdf-parse": "^2.4.5",
+    "pg": "^8.16.3",
     "sqlite3": "^5.1.7",
     "uuid": "^9.0.1",
     "xlsx": "^0.18.5",

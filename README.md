@@ -6,7 +6,8 @@ A production-ready, provider-agnostic Node.js SDK for End-to-End RAG (Retrieval-
 
 *   **Multi-Provider Support**: First-class support for **OpenAI**, **Gemini**, **Anthropic**, **OpenRouter**, and **Hugging Face**.
 *   **Modular Vector Store**:
-    *   **Prisma**: Use your existing PostgreSQL database with `pgvector`.
+    *   **Prisma**: Use your existing PostgreSQL database with `pgvector` (via Prisma).
+    *   **Native PostgreSQL**: Direct connection to PostgreSQL using `pg` driver (no ORM required).
     *   **ChromaDB**: Native support for the open-source vector database.
     *   **Qdrant & Milvus**: Additional backends for portability.
     *   **Extensible**: Easily add others by extending the `VectorStore` class.

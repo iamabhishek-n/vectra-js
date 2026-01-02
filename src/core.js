@@ -10,6 +10,7 @@ const { OpenRouterBackend } = require('./backends/openrouter');
 const { HuggingFaceBackend } = require('./backends/huggingface');
 const { PrismaVectorStore } = require('./backends/prisma_store');
 const { ChromaVectorStore } = require('./backends/chroma_store');
+const { PostgresVectorStore } = require('./backends/postgres_store');
 const { QdrantVectorStore } = require('./backends/qdrant_store');
 const { MilvusVectorStore } = require('./backends/milvus_store');
 const { LLMReranker } = require('./reranker');
@@ -98,6 +99,7 @@ class VectraClient {
     if (!dbConfig || !dbConfig.type) throw new Error('Database config missing type');
     const t = dbConfig.type.toLowerCase();
     if (t === 'prisma') return new PrismaVectorStore(dbConfig);
+    if (t === 'postgres') return new PostgresVectorStore(dbConfig);
     if (t === 'chroma') return new ChromaVectorStore(dbConfig);
     if (t === 'qdrant') return new QdrantVectorStore(dbConfig);
     if (t === 'milvus') return new MilvusVectorStore(dbConfig);

@@ -19,14 +19,21 @@ class GeminiBackend {
   }
 
   async embedDocuments(texts) {
-    const res = await this._retry(() => this.client.models.embedContent({
-      model: this.config.modelName,
-      contents: texts,
-      config: { outputDimensionality: this.config.dimensions }
-    }));
-    const out = res?.embeddings || res?.data?.embeddings;
-    if (!out || !Array.isArray(out)) throw new Error('Gemini embedding response missing embeddings');
-    return out.map(e => e.values || e.embedding?.values || e);
+    const BATCH_SIZE = 100;
+    const allEmbeddings = [];
+
+    for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+      const batch = texts.slice(i, i + BATCH_SIZE);
+      const res = await this._retry(() => this.client.models.embedContent({
+        model: this.config.modelName,
+        contents: batch,
+        config: { outputDimensionality: this.config.dimensions }
+      }));
+      const out = res?.embeddings || res?.data?.embeddings;
+      if (!out || !Array.isArray(out)) throw new Error('Gemini embedding response missing embeddings');
+      allEmbeddings.push(...out.map(e => e.values || e.embedding?.values || e));
+    }
+    return allEmbeddings;
   }
   async embedQuery(text) {
     const res = await this._retry(() => this.client.models.embedContent({
