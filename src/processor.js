@@ -125,7 +125,7 @@ class DocumentProcessor {
         } else {
           finalChunks.push(window);
         }
-      } catch (e) { 
+      } catch (_) { 
         // Fallback to window if parsing fails
         finalChunks.push(window); 
       }

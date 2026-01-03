@@ -113,7 +113,7 @@ const RAGConfigSchema = z.object({
   generation: z.object({ structuredOutput: z.enum(['none','citations']).default('none'), outputFormat: z.enum(['text','json']).default('text') }).optional(),
   prompts: z.object({ query: z.string().optional(), reranking: z.string().optional() }).optional(),
   tracing: z.object({ enable: z.boolean().default(false) }).optional(),
-  callbacks: z.array(z.custom((val) => true)).optional(), 
+  callbacks: z.array(z.custom((_) => true)).optional(), 
   observability: z.object({
     enabled: z.boolean().default(false),
     sqlitePath: z.string().default('vectra-observability.db'),

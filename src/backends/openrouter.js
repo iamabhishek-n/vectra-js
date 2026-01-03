@@ -15,8 +15,8 @@ class OpenRouterBackend {
     });
   }
 
-  async embedDocuments(texts) { throw new Error('OpenRouter does not support embeddings via this SDK.'); }
-  async embedQuery(text) { throw new Error('OpenRouter does not support embeddings via this SDK.'); }
+  async embedDocuments(_) { throw new Error('OpenRouter does not support embeddings via this SDK.'); }
+  async embedQuery(_) { throw new Error('OpenRouter does not support embeddings via this SDK.'); }
 
   async generate(prompt, sys) {
     const msgs = [];

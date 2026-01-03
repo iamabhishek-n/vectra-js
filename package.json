@@ -1,13 +1,13 @@
 {
   "name": "vectra-js",
-  "version": "0.9.7",
+  "version": "0.9.7-beta",
   "description": "A production-ready, provider-agnostic Node.js SDK for End-to-End RAG pipelines.",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "prisma:generate": "prisma generate",
-    "lint": "eslint . --ext .js,.cjs,.mjs",
-    "lint:fix": "eslint . --ext .js,.cjs,.mjs --fix"
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "bin": {
     "vectra": "bin/vectra.js"

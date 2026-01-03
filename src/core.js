@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { RAGConfigSchema, ProviderType, ChunkingStrategy, RetrievalStrategy } = require('./config');
+const { RAGConfigSchema, ProviderType, RetrievalStrategy } = require('./config');
 const crypto = require('crypto');
 const { DocumentProcessor } = require('./processor');
 const { OpenAIBackend } = require('./backends/openai');
@@ -19,6 +19,18 @@ const { OllamaBackend } = require('./backends/ollama');
 const { v5: uuidv5 } = require('uuid');
 const { v4: uuidv4 } = require('uuid');
 const SQLiteLogger = require('./observability');
+
+const DEFAULT_TOKEN_BUDGET = 2048;
+const DEFAULT_PREFER_SUMMARY_BELOW = 1024;
+const DEFAULT_SUMMARY_LENGTH = 800;
+const DEFAULT_CHUNK_LENGTH = 1200;
+const DEFAULT_FALLBACK_SUMMARY_LENGTH = 300;
+const DEFAULT_KEYWORD_COUNT = 10;
+const DEFAULT_MEMORY_MESSAGES = 20;
+const DEFAULT_CONCURRENCY_LIMIT = 5;
+const DEFAULT_RETRY_ATTEMPTS = 3;
+const DEFAULT_INITIAL_RETRY_DELAY = 500;
+const DEFAULT_MAX_RETRY_DELAY = 4000;
 
 class VectraClient {
   constructor(config) {
@@ -50,7 +62,7 @@ class VectraClient {
     this.vectorStore = this.createVectorStore(this.config.database);
     this._embeddingCache = new Map();
     this._metadataEnrichmentEnabled = !!(this.config.metadata && this.config.metadata.enrichment);
-    const mm = this.config.memory?.maxMessages || 20;
+    const mm = this.config.memory?.maxMessages || DEFAULT_MEMORY_MESSAGES;
     if (this.config.memory && this.config.memory.enabled) {
       if (this.config.memory.type === 'in-memory') {
         this.history = new InMemoryHistory(mm);
@@ -129,12 +141,42 @@ class VectraClient {
         const words = c.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 3);
         const freq = {};
         for (const w of words) freq[w] = (freq[w] || 0) + 1;
-        const top = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([w])=>w);
-        const summary = c.slice(0, 300);
+        const top = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,DEFAULT_KEYWORD_COUNT).map(([w])=>w);
+        const summary = c.slice(0, DEFAULT_FALLBACK_SUMMARY_LENGTH);
         enriched.push({ summary, keywords: top, hypothetical_questions: [] });
       }
     }
     return enriched;
+  }
+
+  async _batchEmbedChunks(toEmbed, mapIndex, hashes) {
+    const newEmbeds = [];
+    if (toEmbed.length > 0) {
+      const enabled = !!(this.config.ingestion && this.config.ingestion.rateLimitEnabled);
+      const defaultLimit = (this.config.ingestion && typeof this.config.ingestion.concurrencyLimit === 'number') ? this.config.ingestion.concurrencyLimit : DEFAULT_CONCURRENCY_LIMIT;
+      const limit = enabled ? defaultLimit : toEmbed.length;
+      const batches = [];
+      for (let i = 0; i < toEmbed.length; i += limit) batches.push(toEmbed.slice(i, i + limit));
+      for (const batch of batches) {
+        let attempt = 0; let delay = DEFAULT_INITIAL_RETRY_DELAY;
+        while (true) {
+          try {
+            const out = await this.embedder.embedDocuments(batch);
+            newEmbeds.push(...out);
+            break;
+          } catch (err) {
+            attempt++;
+            if (attempt >= DEFAULT_RETRY_ATTEMPTS) throw err;
+            await new Promise(r => setTimeout(r, delay));
+            delay = Math.min(DEFAULT_MAX_RETRY_DELAY, delay * 2);
+          }
+        }
+      }
+      newEmbeds.forEach((vec, j) => {
+        const h = hashes[mapIndex[j]];
+        this._embeddingCache.set(h, vec);
+      });
+    }
   }
 
   async ingestDocuments(filePath) {
@@ -208,33 +250,9 @@ class VectraClient {
         toEmbed.push(chunks[i]);
         mapIndex.push(i);
       });
-      const newEmbeds = [];
-      if (toEmbed.length > 0) {
-        const enabled = !!(this.config.ingestion && this.config.ingestion.rateLimitEnabled);
-        const defaultLimit = (this.config.ingestion && typeof this.config.ingestion.concurrencyLimit === 'number') ? this.config.ingestion.concurrencyLimit : 5;
-        const limit = enabled ? defaultLimit : toEmbed.length;
-        const batches = [];
-        for (let i = 0; i < toEmbed.length; i += limit) batches.push(toEmbed.slice(i, i + limit));
-        for (const batch of batches) {
-          let attempt = 0; let delay = 500;
-          while (true) {
-            try {
-              const out = await this.embedder.embedDocuments(batch);
-              newEmbeds.push(...out);
-              break;
-            } catch (err) {
-              attempt++;
-              if (attempt >= 3) throw err;
-              await new Promise(r => setTimeout(r, delay));
-              delay = Math.min(4000, delay * 2);
-            }
-          }
-        }
-        newEmbeds.forEach((vec, j) => {
-          const h = hashes[mapIndex[j]];
-          this._embeddingCache.set(h, vec);
-        });
-      }
+      
+      await this._batchEmbedChunks(toEmbed, mapIndex, hashes);
+      
       const embeddings = hashes.map((h) => this._embeddingCache.get(h));
 
       const metas = this.processor.computeChunkMetadata(filePath, rawText, chunks);
@@ -290,7 +308,7 @@ class VectraClient {
           await this.vectorStore.deleteDocuments({ filter: { absolutePath: absPath } });
         } catch (_) {}
       }
-      let attempt = 0; let delay = 500;
+      let attempt = 0; let delay = DEFAULT_INITIAL_RETRY_DELAY;
       while (true) {
         try {
           if (mode === 'replace' && this.vectorStore && typeof this.vectorStore.upsertDocuments === 'function') {
@@ -301,9 +319,9 @@ class VectraClient {
           break;
         } catch (err) {
           attempt++;
-          if (attempt >= 3) throw err;
+          if (attempt >= DEFAULT_RETRY_ATTEMPTS) throw err;
           await new Promise(r => setTimeout(r, delay));
-          delay = Math.min(4000, delay * 2);
+          delay = Math.min(DEFAULT_MAX_RETRY_DELAY, delay * 2);
         }
       }
       const durationMs = Date.now() - t0;
@@ -395,16 +413,16 @@ class VectraClient {
   }
 
   buildContextParts(docs, query) {
-    const budget = (this.config.queryPlanning && this.config.queryPlanning.tokenBudget) ? this.config.queryPlanning.tokenBudget : 2048;
-    const preferSumm = (this.config.queryPlanning && this.config.queryPlanning.preferSummariesBelow) ? this.config.queryPlanning.preferSummariesBelow : 1024;
+    const budget = (this.config.queryPlanning && this.config.queryPlanning.tokenBudget) ? this.config.queryPlanning.tokenBudget : DEFAULT_TOKEN_BUDGET;
+    const preferSumm = (this.config.queryPlanning && this.config.queryPlanning.preferSummariesBelow) ? this.config.queryPlanning.preferSummariesBelow : DEFAULT_PREFER_SUMMARY_BELOW;
     const parts = [];
     let used = 0;
     for (const d of docs) {
       const t = d.metadata?.docTitle || '';
       const sec = d.metadata?.section || '';
       const pages = (d.metadata?.pageFrom && d.metadata?.pageTo) ? `pages ${d.metadata.pageFrom}-${d.metadata.pageTo}` : '';
-      const sum = d.metadata?.summary ? d.metadata.summary : d.content.slice(0, 800);
-      const chosen = (this.tokenEstimate(sum) <= preferSumm) ? sum : d.content.slice(0, 1200);
+      const sum = d.metadata?.summary ? d.metadata.summary : d.content.slice(0, DEFAULT_SUMMARY_LENGTH);
+      const chosen = (this.tokenEstimate(sum) <= preferSumm) ? sum : d.content.slice(0, DEFAULT_CHUNK_LENGTH);
       const part = `${t} ${sec} ${pages}\n${chosen}`;
       const est = this.tokenEstimate(part);
       if (used + est > budget) break;

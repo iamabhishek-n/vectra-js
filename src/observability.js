@@ -17,26 +17,20 @@ class SQLiteLogger {
         const dbPath = path.isAbsolute(rawPath) ? rawPath : path.resolve(process.cwd(), rawPath);
         // Ensure directory exists
         const dbDir = path.dirname(dbPath);
-        console.log(`[SQLiteLogger] dbPath: ${dbPath}, dbDir: ${dbDir}`);
         
         const fs = require('fs');
         if (!fs.existsSync(dbDir)) {
-          console.log(`[SQLiteLogger] Creating directory: ${dbDir}`);
           fs.mkdirSync(dbDir, { recursive: true });
-        } else {
-          console.log(`[SQLiteLogger] Directory exists: ${dbDir}`);
         }
 
         const sqlite3 = require('sqlite3').verbose();
         this.db = new sqlite3.Database(dbPath, (err) => {
             if (err) {
-                console.error('Failed to connect to SQLite database:', err);
                 throw err;
             }
         });
         this.initializeSchema();
     } catch (error) {
-        console.error('Failed to initialize SQLite logger:', error);
         throw error;
     }
   }

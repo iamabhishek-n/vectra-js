@@ -1,7 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { RAGConfigSchema, ProviderType, ChunkingStrategy, RetrievalStrategy } = require('./config');
+const { ProviderType, ChunkingStrategy, RetrievalStrategy } = require('./config');
 const sqlite3 = require('sqlite3').verbose();
 
 
