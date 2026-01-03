@@ -2,6 +2,12 @@
 
 A production-ready, provider-agnostic Node.js SDK for End-to-End RAG (Retrieval-Augmented Generation) pipelines.
 
+![GitHub Release](https://img.shields.io/github/v/release/iamabhishek-n/vectra-js)
+![NPM Version](https://img.shields.io/npm/v/vectra-js)
+![NPM Downloads](https://img.shields.io/npm/dm/vectra-js)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=iamabhishek-n_vectra-js&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=iamabhishek-n_vectra-js)
+
+
 ## Features
 
 *   **Multi-Provider Support**: First-class support for **OpenAI**, **Gemini**, **Anthropic**, **OpenRouter**, and **Hugging Face**.
