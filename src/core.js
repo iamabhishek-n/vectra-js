@@ -179,6 +179,111 @@ class VectraClient {
     }
   }
 
+  async _processDirectory(filePath) {
+    const files = await fs.promises.readdir(filePath);
+    const summary = { processed: 0, succeeded: 0, failed: 0, errors: [] };
+    for (const file of files) {
+      const full = path.join(filePath, file);
+      if (this._isTemporaryFile(full)) continue;
+      summary.processed++;
+      try {
+        await this.ingestDocuments(full);
+        summary.succeeded++;
+      } catch (err) {
+        summary.failed++;
+        summary.errors.push({ file: full, message: err?.message || String(err) });
+        this.trigger('onError', err);
+      }
+    }
+    this.trigger('onIngestSummary', summary);
+  }
+
+  async _validateFile(filePath, stats) {
+    const absPath = path.resolve(filePath);
+    const size = stats.size || 0;
+    const mtime = Math.floor(stats.mtimeMs || Date.now());
+    const md5 = crypto.createHash('md5');
+    const sha = crypto.createHash('sha256');
+    await new Promise((resolve, reject) => {
+      const s = fs.createReadStream(filePath);
+      s.on('data', (chunk) => { md5.update(chunk); sha.update(chunk); });
+      s.on('error', reject);
+      s.on('end', resolve);
+    });
+    const fileMD5 = md5.digest('hex');
+    const fileSHA256 = sha.digest('hex');
+    return { absolutePath: absPath, fileMD5, fileSHA256, fileSize: size, lastModified: mtime, timestamp: Date.now() };
+  }
+
+  async _prepareDocuments(filePath, rawText, chunks, embeddings, hashes, validation) {
+    const metas = this.processor.computeChunkMetadata(filePath, rawText, chunks);
+    const idNamespace = uuidv5('vectra-js', uuidv5.DNS);
+    let documents = chunks.map((content, i) => ({
+      id: uuidv5(`${validation.fileSHA256}:${i}`, idNamespace),
+      content,
+      embedding: embeddings[i],
+      metadata: { 
+        docId: uuidv5(`${validation.fileSHA256}:${i}`, idNamespace),
+        source: filePath,
+        absolutePath: validation.absolutePath,
+        fileMD5: validation.fileMD5,
+        fileSHA256: validation.fileSHA256,
+        fileSize: validation.fileSize,
+        lastModified: validation.lastModified,
+        chunkIndex: i,
+        sha256: hashes[i],
+        fileType: metas[i]?.fileType,
+        docTitle: metas[i]?.docTitle,
+        pageFrom: metas[i]?.pageFrom,
+        pageTo: metas[i]?.pageTo,
+        section: metas[i]?.section
+      }
+    }));
+
+    if (this._metadataEnrichmentEnabled) {
+      const extra = await this._enrichChunkMetadata(chunks);
+      documents = documents.map((d, i) => ({
+        ...d,
+        metadata: {
+          ...d.metadata,
+          summary: extra[i]?.summary,
+          keywords: extra[i]?.keywords,
+          hypothetical_questions: extra[i]?.hypothetical_questions,
+        }
+      }));
+    }
+    return documents;
+  }
+
+  async _storeDocuments(documents, mode, absPath) {
+    if (this.vectorStore && typeof this.vectorStore.ensureIndexes === 'function') {
+      try { await this.vectorStore.ensureIndexes(); } catch (_) {}
+    }
+    
+    if (mode === 'replace' && this.vectorStore && typeof this.vectorStore.deleteDocuments === 'function') {
+      try {
+        await this.vectorStore.deleteDocuments({ filter: { absolutePath: absPath } });
+      } catch (_) {}
+    }
+    
+    let attempt = 0; let delay = DEFAULT_INITIAL_RETRY_DELAY;
+    while (true) {
+      try {
+        if (mode === 'replace' && this.vectorStore && typeof this.vectorStore.upsertDocuments === 'function') {
+          await this.vectorStore.upsertDocuments(documents);
+        } else {
+          await this.vectorStore.addDocuments(documents);
+        }
+        break;
+      } catch (err) {
+        attempt++;
+        if (attempt >= DEFAULT_RETRY_ATTEMPTS) throw err;
+        await new Promise(r => setTimeout(r, delay));
+        delay = Math.min(DEFAULT_MAX_RETRY_DELAY, delay * 2);
+      }
+    }
+  }
+
   async ingestDocuments(filePath) {
     const traceId = uuidv4();
     const rootSpanId = uuidv4();
@@ -190,58 +295,33 @@ class VectraClient {
       const stats = await fs.promises.stat(filePath);
 
       if (stats.isDirectory()) {
-        const files = await fs.promises.readdir(filePath);
-        const summary = { processed: 0, succeeded: 0, failed: 0, errors: [] };
-        for (const file of files) {
-          const full = path.join(filePath, file);
-          if (this._isTemporaryFile(full)) continue;
-          summary.processed++;
-          try {
-            await this.ingestDocuments(full);
-            summary.succeeded++;
-          } catch (err) {
-            summary.failed++;
-            summary.errors.push({ file: full, message: err?.message || String(err) });
-            this.trigger('onError', err);
-          }
-        }
-        this.trigger('onIngestSummary', summary);
+        await this._processDirectory(filePath);
         return;
       }
 
       const t0 = Date.now();
       this.trigger('onIngestStart', filePath);
-      const absPath = path.resolve(filePath);
-      const size = stats.size || 0;
-      const mtime = Math.floor(stats.mtimeMs || Date.now());
-      const md5 = crypto.createHash('md5');
-      const sha = crypto.createHash('sha256');
-      await new Promise((resolve, reject) => {
-        const s = fs.createReadStream(filePath);
-        s.on('data', (chunk) => { md5.update(chunk); sha.update(chunk); });
-        s.on('error', reject);
-        s.on('end', resolve);
-      });
-      const fileMD5 = md5.digest('hex');
-      const fileSHA256 = sha.digest('hex');
-      const validation = { absolutePath: absPath, fileMD5, fileSHA256, fileSize: size, lastModified: mtime, timestamp: Date.now() };
+      
+      const validation = await this._validateFile(filePath, stats);
       this.trigger('onPreIngestionValidation', validation);
+      
       const mode = (this.config.ingestion && this.config.ingestion.mode) ? this.config.ingestion.mode : 'skip';
       let exists = false;
       if (this.vectorStore && typeof this.vectorStore.fileExists === 'function') {
-        try { exists = await this.vectorStore.fileExists(fileSHA256, size, mtime); } catch { exists = false; }
+        try { exists = await this.vectorStore.fileExists(validation.fileSHA256, validation.fileSize, validation.lastModified); } catch { exists = false; }
       }
       if (mode === 'skip' && exists) {
         this.trigger('onIngestSkipped', validation);
         return;
       }
+
       const rawText = await this.processor.loadDocument(filePath);
 
       this.trigger('onChunkingStart', this.config.chunking.strategy);
       const chunks = await this.processor.process(rawText);
 
       this.trigger('onEmbeddingStart', chunks.length);
-      // Compute hashes and use cache for known chunks
+      
       const hashes = chunks.map(c => crypto.createHash('sha256').update(c).digest('hex'));
       const toEmbed = [];
       const mapIndex = [];
@@ -255,75 +335,19 @@ class VectraClient {
       
       const embeddings = hashes.map((h) => this._embeddingCache.get(h));
 
-      const metas = this.processor.computeChunkMetadata(filePath, rawText, chunks);
-      const idNamespace = uuidv5('vectra-js', uuidv5.DNS);
-      let documents = chunks.map((content, i) => ({
-        id: uuidv5(`${fileSHA256}:${i}`, idNamespace),
-        content,
-        embedding: embeddings[i],
-        metadata: { 
-          docId: uuidv5(`${fileSHA256}:${i}`, idNamespace),
-          source: filePath,
-          absolutePath: absPath,
-          fileMD5,
-          fileSHA256,
-          fileSize: size,
-          lastModified: mtime,
-          chunkIndex: i,
-          sha256: hashes[i],
-          fileType: metas[i]?.fileType,
-          docTitle: metas[i]?.docTitle,
-          pageFrom: metas[i]?.pageFrom,
-          pageTo: metas[i]?.pageTo,
-          section: metas[i]?.section
-        }
-      }));
-
-      if (this._metadataEnrichmentEnabled) {
-        const extra = await this._enrichChunkMetadata(chunks);
-        documents = documents.map((d, i) => ({
-          ...d,
-          metadata: {
-            ...d.metadata,
-            summary: extra[i]?.summary,
-            keywords: extra[i]?.keywords,
-            hypothetical_questions: extra[i]?.hypothetical_questions,
-          }
-        }));
-      }
-
-      if (this.vectorStore && typeof this.vectorStore.ensureIndexes === 'function') {
-        try { await this.vectorStore.ensureIndexes(); } catch (_) {}
-      }
+      const documents = await this._prepareDocuments(filePath, rawText, chunks, embeddings, hashes, validation);
+      
       let existsServer = false;
       if (this.vectorStore && typeof this.vectorStore.fileExists === 'function') {
-        try { existsServer = await this.vectorStore.fileExists(fileSHA256, size, mtime); } catch { existsServer = false; }
+        try { existsServer = await this.vectorStore.fileExists(validation.fileSHA256, validation.fileSize, validation.lastModified); } catch { existsServer = false; }
       }
       if (mode === 'skip' && existsServer) {
         this.trigger('onIngestSkipped', validation);
         return;
       }
-      if (mode === 'replace' && this.vectorStore && typeof this.vectorStore.deleteDocuments === 'function') {
-        try {
-          await this.vectorStore.deleteDocuments({ filter: { absolutePath: absPath } });
-        } catch (_) {}
-      }
-      let attempt = 0; let delay = DEFAULT_INITIAL_RETRY_DELAY;
-      while (true) {
-        try {
-          if (mode === 'replace' && this.vectorStore && typeof this.vectorStore.upsertDocuments === 'function') {
-            await this.vectorStore.upsertDocuments(documents);
-          } else {
-            await this.vectorStore.addDocuments(documents);
-          }
-          break;
-        } catch (err) {
-          attempt++;
-          if (attempt >= DEFAULT_RETRY_ATTEMPTS) throw err;
-          await new Promise(r => setTimeout(r, delay));
-          delay = Math.min(DEFAULT_MAX_RETRY_DELAY, delay * 2);
-        }
-      }
+      
+      await this._storeDocuments(documents, mode, validation.absolutePath);
+
       const durationMs = Date.now() - t0;
       this.trigger('onIngestEnd', filePath, chunks.length, durationMs);
       
@@ -335,7 +359,7 @@ class VectraClient {
         endTime: Date.now(),
         input: { filePath },
         output: { chunks: chunks.length, durationMs },
-        attributes: { fileSize: size },
+        attributes: { fileSize: validation.fileSize },
         provider,
         modelName
       });
