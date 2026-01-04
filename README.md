@@ -61,16 +61,16 @@ graph TD
     %% INGESTION PIPELINE
     %% =========================
     subgraph Ingestion["Ingestion Pipeline"]
-        A[Raw Files / URLs] -->|Load| B[File Parsers<br/>(PDF · DOCX · TXT · MD · XLSX)]
-        B -->|Split| C{Chunking Engine}
+        A["Raw Files / URLs"] -->|Load| B["File Parsers (PDF, DOCX, TXT, MD, XLSX)"]
+        B -->|Split| C{"Chunking Engine"}
         
-        C -- Recursive / Token-Aware --> D[Text Chunks]
-        C -- Agentic (LLM) --> D
+        C -- "Recursive / Token-Aware" --> D["Text Chunks"]
+        C -- "Agentic (LLM)" --> D
         
-        D -->|Embed| E[Embedding Provider<br/>(OpenAI · Gemini · Ollama · HF)]
-        E -->|Upsert| F[(Vector Store<br/>Postgres · Chroma · Qdrant · Milvus)]
+        D -->|Embed| E["Embedding Provider (OpenAI, Gemini, Ollama, HF)"]
+        E -->|Upsert| F[("Vector Store (Postgres, Chroma, Qdrant, Milvus)")]
         
-        D -->|Optional| M1[Metadata Enrichment<br/>(Summary · Keywords · Q&A)]
+        D -->|Optional| M1["Metadata Enrichment (Summary, Keywords, Q&A)"]
         M1 --> F
     end
 
@@ -78,38 +78,38 @@ graph TD
     %% QUERY / RAG PIPELINE
     %% =========================
     subgraph Retrieval["RAG Query Pipeline"]
-        G[User Query] -->|Normalize| H{Retrieval Strategy}
+        G["User Query"] -->|Normalize| H{"Retrieval Strategy"}
         
-        H -- Naive --> I[Semantic Search]
-        H -- HyDE --> J[Hypothetical Answer]
-        H -- Multi-Query --> K[Query Variants]
-        H -- Hybrid (RRF) --> L[Semantic + Lexical]
-        H -- MMR --> I
+        H -- "Naive" --> I["Semantic Search"]
+        H -- "HyDE" --> J["Hypothetical Answer"]
+        H -- "Multi-Query" --> K["Query Variants"]
+        H -- "Hybrid (RRF)" --> L["Semantic + Lexical Search"]
+        H -- "MMR" --> I
         
         J --> I
         K --> I
         L --> I
         
         F <-->|Vector Search| I
-        I --> N[Candidate Chunks]
+        I --> N["Candidate Chunks"]
         
-        N -->|Optional| O[LLM Reranker]
-        O --> P[Final Context]
+        N -->|Optional| O["LLM Reranker"]
+        O --> P["Final Context"]
         
-        P -->|Plan| Q[Query Planner<br/>(Token Budget · Citations)]
-        Q -->|Ground| R[Grounding Engine]
+        P -->|Plan| Q["Query Planner (Token Budget, Citations)"]
+        Q -->|Ground| R["Grounding Engine"]
         
-        R -->|Prompt| S[LLM Provider<br/>(OpenAI · Gemini · Anthropic · Ollama)]
-        S -->|Stream / JSON| T[Final Answer]
+        R -->|Prompt| S["LLM Provider (OpenAI, Gemini, Anthropic, Ollama)"]
+        S -->|Stream or JSON| T["Final Answer"]
     end
 
     %% =========================
     %% CROSS-CUTTING CONCERNS
     %% =========================
     subgraph CrossCutting["Cross-Cutting Systems"]
-        U[Conversation Memory<br/>(In-Memory · Redis · Postgres)]
-        V[Observability<br/>(Metrics · Traces · Sessions)]
-        W[Callbacks & Hooks]
+        U["Conversation Memory (In-Memory, Redis, Postgres)"]
+        V["Observability (Metrics, Traces, Sessions)"]
+        W["Callbacks and Hooks"]
     end
 
     T --> U
@@ -117,6 +117,7 @@ graph TD
     Retrieval --> V
     Ingestion --> W
     Retrieval --> W
+
 ```
 
 Every stage is **explicitly configurable**, validated at runtime, and observable.
