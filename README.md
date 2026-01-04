@@ -55,70 +55,13 @@ Vectra provides a **fully modular RAG pipeline**:
 ```
 Load → Chunk → Embed → Store → Retrieve → Rerank → Plan → Ground → Generate → Stream
 ```
-```mermaid
-graph TD
-    %% =========================
-    %% INGESTION PIPELINE
-    %% =========================
-    subgraph Ingestion["Ingestion Pipeline"]
-        A["Raw Files / URLs"] -->|Load| B["File Parsers (PDF, DOCX, TXT, MD, XLSX)"]
-        B -->|Split| C{"Chunking Engine"}
-        
-        C -- "Recursive / Token-Aware" --> D["Text Chunks"]
-        C -- "Agentic (LLM)" --> D
-        
-        D -->|Embed| E["Embedding Provider (OpenAI, Gemini, Ollama, HF)"]
-        E -->|Upsert| F[("Vector Store (Postgres, Chroma, Qdrant, Milvus)")]
-        
-        D -->|Optional| M1["Metadata Enrichment (Summary, Keywords, Q&A)"]
-        M1 --> F
-    end
+<p align="center">
+  <img src="docs/assets/vectraArch.png" alt="Vectra SDK Architecture" width="900">
+</p>
 
-    %% =========================
-    %% QUERY / RAG PIPELINE
-    %% =========================
-    subgraph Retrieval["RAG Query Pipeline"]
-        G["User Query"] -->|Normalize| H{"Retrieval Strategy"}
-        
-        H -- "Naive" --> I["Semantic Search"]
-        H -- "HyDE" --> J["Hypothetical Answer"]
-        H -- "Multi-Query" --> K["Query Variants"]
-        H -- "Hybrid (RRF)" --> L["Semantic + Lexical Search"]
-        H -- "MMR" --> I
-        
-        J --> I
-        K --> I
-        L --> I
-        
-        F <-->|Vector Search| I
-        I --> N["Candidate Chunks"]
-        
-        N -->|Optional| O["LLM Reranker"]
-        O --> P["Final Context"]
-        
-        P -->|Plan| Q["Query Planner (Token Budget, Citations)"]
-        Q -->|Ground| R["Grounding Engine"]
-        
-        R -->|Prompt| S["LLM Provider (OpenAI, Gemini, Anthropic, Ollama)"]
-        S -->|Stream or JSON| T["Final Answer"]
-    end
-
-    %% =========================
-    %% CROSS-CUTTING CONCERNS
-    %% =========================
-    subgraph CrossCutting["Cross-Cutting Systems"]
-        U["Conversation Memory (In-Memory, Redis, Postgres)"]
-        V["Observability (Metrics, Traces, Sessions)"]
-        W["Callbacks and Hooks"]
-    end
-
-    T --> U
-    Ingestion --> V
-    Retrieval --> V
-    Ingestion --> W
-    Retrieval --> W
-
-```
+<p align="center">
+  <em>Vectra SDK – End-to-End RAG Architecture</em>
+</p>
 
 Every stage is **explicitly configurable**, validated at runtime, and observable.
 
