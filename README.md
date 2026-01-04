@@ -7,6 +7,9 @@ A production-ready, provider-agnostic Node.js SDK for End-to-End RAG (Retrieval-
 ![NPM Downloads](https://img.shields.io/npm/dm/vectra-js)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=iamabhishek-n_vectra-js&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=iamabhishek-n_vectra-js)
 
+If you find this project useful, consider supporting it:
+[![Sponsor me on GitHub](https://img.shields.io/badge/Sponsor%20me%20on-GitHub-%23FFD43B?logo=github)](https://github.com/sponsors/iamabhishek-n)
+[![Buy me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20Coffee-%23FFDD00?logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/iamabhishekn)
 
 ## Features
 
