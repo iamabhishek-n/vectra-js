@@ -55,6 +55,69 @@ Vectra provides a **fully modular RAG pipeline**:
 ```
 Load → Chunk → Embed → Store → Retrieve → Rerank → Plan → Ground → Generate → Stream
 ```
+```mermaid
+graph TD
+    %% =========================
+    %% INGESTION PIPELINE
+    %% =========================
+    subgraph Ingestion["Ingestion Pipeline"]
+        A[Raw Files / URLs] -->|Load| B[File Parsers<br/>(PDF · DOCX · TXT · MD · XLSX)]
+        B -->|Split| C{Chunking Engine}
+        
+        C -- Recursive / Token-Aware --> D[Text Chunks]
+        C -- Agentic (LLM) --> D
+        
+        D -->|Embed| E[Embedding Provider<br/>(OpenAI · Gemini · Ollama · HF)]
+        E -->|Upsert| F[(Vector Store<br/>Postgres · Chroma · Qdrant · Milvus)]
+        
+        D -->|Optional| M1[Metadata Enrichment<br/>(Summary · Keywords · Q&A)]
+        M1 --> F
+    end
+
+    %% =========================
+    %% QUERY / RAG PIPELINE
+    %% =========================
+    subgraph Retrieval["RAG Query Pipeline"]
+        G[User Query] -->|Normalize| H{Retrieval Strategy}
+        
+        H -- Naive --> I[Semantic Search]
+        H -- HyDE --> J[Hypothetical Answer]
+        H -- Multi-Query --> K[Query Variants]
+        H -- Hybrid (RRF) --> L[Semantic + Lexical]
+        H -- MMR --> I
+        
+        J --> I
+        K --> I
+        L --> I
+        
+        F <-->|Vector Search| I
+        I --> N[Candidate Chunks]
+        
+        N -->|Optional| O[LLM Reranker]
+        O --> P[Final Context]
+        
+        P -->|Plan| Q[Query Planner<br/>(Token Budget · Citations)]
+        Q -->|Ground| R[Grounding Engine]
+        
+        R -->|Prompt| S[LLM Provider<br/>(OpenAI · Gemini · Anthropic · Ollama)]
+        S -->|Stream / JSON| T[Final Answer]
+    end
+
+    %% =========================
+    %% CROSS-CUTTING CONCERNS
+    %% =========================
+    subgraph CrossCutting["Cross-Cutting Systems"]
+        U[Conversation Memory<br/>(In-Memory · Redis · Postgres)]
+        V[Observability<br/>(Metrics · Traces · Sessions)]
+        W[Callbacks & Hooks]
+    end
+
+    T --> U
+    Ingestion --> V
+    Retrieval --> V
+    Ingestion --> W
+    Retrieval --> W
+```
 
 Every stage is **explicitly configurable**, validated at runtime, and observable.
 
