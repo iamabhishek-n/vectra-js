@@ -1,6 +1,6 @@
 {
   "name": "vectra-js",
-  "version": "0.9.7-beta",
+  "version": "0.9.8-beta",
   "description": "A production-ready, provider-agnostic Node.js SDK for End-to-End RAG pipelines.",
   "main": "index.js",
   "scripts": {

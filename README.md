@@ -56,7 +56,7 @@ Vectra provides a **fully modular RAG pipeline**:
 Load → Chunk → Embed → Store → Retrieve → Rerank → Plan → Ground → Generate → Stream
 ```
 <p align="center">
-  <img src="docs/assets/vectraArch.png" alt="Vectra SDK Architecture" width="900">
+  <img src="https://vectra.thenxtgenagents.com/vectraArch.png" alt="Vectra SDK Architecture" width="900">
 </p>
 
 <p align="center">
