@@ -14,7 +14,6 @@ const API_ENDPOINT =
   process.env.VECTRA_TELEMETRY_ENDPOINT ||
   'https://thwcefdrkimerqztvfjj.supabase.co/functions/v1/vectra-collect';
 
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRod2NlZmRya2ltZXJxenR2ZmpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc1ODI2NjUsImV4cCI6MjA4MzE1ODY2NX0.BFHPqN6dAQt7m9gNgzKd71Nlj_gBorHnZ9URdLbY3Mc";
 
 class TelemetryManager {
   constructor() {
@@ -116,7 +115,8 @@ class TelemetryManager {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Authorization': 'Bearer sb_publishable__O2ZcJYtRd_XXSbC-T-9cg_KPZAa_Jv',
+          'apikey': 'sb_publishable__O2ZcJYtRd_XXSbC-T-9cg_KPZAa_Jv',
         },
         body: JSON.stringify(batch), // ✅ FIX: send array directly
         signal: AbortSignal.timeout(8000),
