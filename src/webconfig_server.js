@@ -2,6 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { ProviderType, ChunkingStrategy, RetrievalStrategy } = require('./config');
+const telemetry = require('./telemetry');
 const sqlite3 = require('sqlite3').verbose();
 
 
@@ -90,6 +91,14 @@ function serveStatic(res, filePath, contentType) {
 
 function start(configPath, mode = 'webconfig', port = 8766, openInBrowser = true) {
   const absConfigPath = path.resolve(configPath);
+  
+  // Init telemetry
+  let cfg = {};
+  try {
+      if (fs.existsSync(absConfigPath)) cfg = JSON.parse(fs.readFileSync(absConfigPath, 'utf-8'));
+  } catch (_) {}
+  telemetry.init(cfg);
+  telemetry.track('feature_used', { feature: mode }); // mode is 'webconfig' or 'dashboard'
   
   const createServer = (currentPort) => {
     const server = http.createServer((req, res) => {

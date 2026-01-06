@@ -19,6 +19,7 @@ const { OllamaBackend } = require('./backends/ollama');
 const { v5: uuidv5 } = require('uuid');
 const { v4: uuidv4 } = require('uuid');
 const SQLiteLogger = require('./observability');
+const telemetry = require('./telemetry');
 
 const DEFAULT_TOKEN_BUDGET = 2048;
 const DEFAULT_PREFER_SUMMARY_BELOW = 1024;
@@ -37,6 +38,17 @@ class VectraClient {
     const parsed = RAGConfigSchema.parse(config);
     this.config = parsed;
     this.callbacks = config.callbacks || [];
+
+    // Initialize telemetry
+    telemetry.init(this.config);
+    telemetry.track('sdk_initialized', {
+      vector_store: this.config.database.type,
+      embedding_provider: this.config.embedding.provider,
+      llm_provider: this.config.llm.provider,
+      observability_enabled: !!(this.config.observability && this.config.observability.enabled),
+      memory_enabled: !!(this.config.memory && this.config.memory.enabled),
+      session_type: this.config.sessionType
+    });
     
     // Initialize observability
     this.logger = (this.config.observability && this.config.observability.enabled) 
@@ -294,6 +306,13 @@ class VectraClient {
     try {
       const stats = await fs.promises.stat(filePath);
 
+      telemetry.track('ingest_started', {
+        source_type: stats.isDirectory() ? 'directory' : 'file',
+        file_types: stats.isDirectory() ? [] : [path.extname(filePath).replace('.', '')],
+        chunking_strategy: this.config.chunking.strategy,
+        metadata_enrichment: this._metadataEnrichmentEnabled
+      });
+
       if (stats.isDirectory()) {
         await this._processDirectory(filePath);
         return;
@@ -351,6 +370,15 @@ class VectraClient {
       const durationMs = Date.now() - t0;
       this.trigger('onIngestEnd', filePath, chunks.length, durationMs);
       
+      const chunkCountBucket = chunks.length < 50 ? '1-50' : chunks.length < 200 ? '50-200' : '200+';
+      const durationBucket = durationMs < 1000 ? '0-1s' : durationMs < 5000 ? '1-5s' : '5s+';
+      
+      telemetry.track('ingest_completed', {
+        chunk_count_bucket: chunkCountBucket,
+        duration_ms_bucket: durationBucket,
+        cached_embeddings: false 
+      });
+      
       this.logger.logTrace({
         traceId,
         spanId: rootSpanId,
@@ -366,6 +394,10 @@ class VectraClient {
       this.logger.logMetric({ name: 'ingest_latency', value: durationMs, tags: { type: 'single_file' } });
 
     } catch (e) {
+      telemetry.track('error_occurred', {
+        stage: 'ingestion',
+        error_type: e.name || 'unknown'
+      });
       this.trigger('onError', e);
       this.logger.logTrace({
         traceId,
@@ -604,6 +636,15 @@ class VectraClient {
         const retrievalMs = Date.now() - tRetrieval;
         this.trigger('onRetrievalEnd', docs.length, retrievalMs);
         
+        telemetry.track('query_executed', {
+           query_mode: 'rag',
+           retrieval_strategy: strategy,
+           reranking_enabled: !!(this.config.reranking && this.config.reranking.enabled),
+           streaming: stream,
+           memory_used: !!(this.history && sessionId),
+           result_count: docs.length
+        });
+        
         this.logger.logTrace({
             traceId,
             spanId: uuidv4(),
@@ -801,6 +842,10 @@ class VectraClient {
             return { answer, sources: docs.map(d => d.metadata) };
         }
     } catch (e) {
+      telemetry.track('error_occurred', {
+        stage: 'retrieval_or_generation',
+        error_type: e.name || 'unknown'
+      });
       this.trigger('onError', e);
       this.logger.logTrace({
         traceId,
@@ -819,6 +864,11 @@ class VectraClient {
   }
 
   async evaluate(testSet) {
+    const bucket = testSet.length < 5 ? '1-5' : testSet.length < 20 ? '5-20' : '20+';
+    telemetry.track('evaluation_run', {
+      dataset_size_bucket: bucket
+    });
+
     const report = [];
     for (const item of testSet) {
       const res = await this.queryRAG(item.question);

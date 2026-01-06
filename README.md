@@ -40,11 +40,12 @@ If you find this project useful, consider supporting it:<br>
   * [WebConfig (Config Generator UI)](#webconfig-config-generator-ui)
   * [Observability Dashboard](#observability-dashboard)
 * [13. Observability & Callbacks](#13-observability--callbacks)
-* [14. Database Schemas & Indexing](#14-database-schemas--indexing)
-* [15. Extending Vectra](#15-extending-vectra)
-* [16. Architecture Overview](#16-architecture-overview)
-* [17. Development & Contribution Guide](#17-development--contribution-guide)
-* [18. Production Best Practices](#18-production-best-practices)
+* [14. Telemetry](#14-telemetry)
+* [15. Database Schemas & Indexing](#15-database-schemas--indexing)
+* [16. Extending Vectra](#16-extending-vectra)
+* [17. Architecture Overview](#17-architecture-overview)
+* [18. Development & Contribution Guide](#18-development--contribution-guide)
+* [19. Production Best Practices](#19-production-best-practices)
 
 ---
 
@@ -127,15 +128,19 @@ Every major subsystem (providers, vector stores, callbacks) is interface‑drive
 ### Library
 
 ```bash
-npm install vectra-js @prisma/client
+npm install vectra-js
 # or
-pnpm add vectra-js @prisma/client
+pnpm add vectra-js
 ```
 
-Optional backends:
+Backends:
 
 ```bash
-npm install chromadb
+npm install pg                    # https://node-postgres.com/
+npm install @prisma/client       # https://prisma.io/docs
+npm install chromadb              # https://docs.trychroma.com/
+npm install qdrant-client         # https://qdrant.tech/documentation/
+npm install pymilvus              # https://milvus.io/docs/
 ```
 
 ### CLI
@@ -152,6 +157,11 @@ pnpm add -g vectra-js
 
 ```js
 const { VectraClient, ProviderType } = require('vectra-js');
+const { Pool } = require('pg');
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL
+});
 
 const client = new VectraClient({
   embedding: {
@@ -162,12 +172,13 @@ const client = new VectraClient({
   llm: {
     provider: ProviderType.GEMINI,
     apiKey: process.env.GOOGLE_API_KEY,
-    modelName: 'gemini-1.5-pro-latest'
+    modelName: 'gemini-2.5-flash'
   },
   database: {
-    type: 'prisma',
-    clientInstance: prisma,
-    tableName: 'Document'
+    type: 'postgres',
+    clientInstance: pool,
+    tableName: 'document',
+    columnMap: { 'content': 'content', 'metadata': 'metadata', 'vector': 'vector' }
   }
 });
 
@@ -240,7 +251,7 @@ Use `dimensions` when using pgvector to avoid runtime mismatches.
 llm: {
   provider: ProviderType.GEMINI,
   apiKey: process.env.GOOGLE_API_KEY,
-  modelName: 'gemini-1.5-pro-latest',
+  modelName: 'gemini-2.5-flash',
   temperature: 0.3,
   maxTokens: 1024
 }
@@ -257,15 +268,54 @@ Used for:
 
 ### Database
 
+Supports Prisma, Postgres (native), Chroma, Qdrant, Milvus.
+
 ```js
+// PostgreSQL (native pg)
 database: {
-  type: 'prisma',
-  clientInstance: prisma,
-  tableName: 'Document'
+  type: 'postgres',
+  clientInstance: pool, // new Pool(...)
+  tableName: 'document',
+  columnMap: { content: 'content', metadata: 'metadata', vector: 'vector' }
 }
 ```
 
-Supports Prisma, Chroma, Qdrant, Milvus.
+```js
+// Prisma
+database: {
+  type: 'prisma',
+  clientInstance: prisma,
+  tableName: 'Document',
+  columnMap: { content: 'content', metadata: 'metadata', vector: 'embedding' }
+}
+```
+
+```js
+// ChromaDB
+database: {
+  type: 'chroma',
+  clientInstance: chromaClient,
+  collectionName: 'rag_collection'
+}
+```
+
+```js
+// Qdrant
+database: {
+  type: 'qdrant',
+  clientInstance: qdrantClient,
+  collectionName: 'rag_collection'
+}
+```
+
+```js
+// Milvus
+database: {
+  type: 'milvus',
+  clientInstance: milvusClient,
+  collectionName: 'rag_collection'
+}
+```
 
 ---
 
@@ -323,6 +373,38 @@ memory: { enabled: true, type: 'in-memory', maxMessages: 20 }
 ```
 
 Redis and Postgres are supported.
+
+```js
+// Redis
+memory: {
+  enabled: true,
+  type: 'redis',
+  maxMessages: 20,
+  redis: {
+    clientInstance: redisClient,
+    keyPrefix: 'vectra:chat:'
+  }
+}
+```
+
+```js
+// Postgres
+memory: {
+  enabled: true,
+  type: 'postgres',
+  maxMessages: 20,
+  postgres: {
+    clientInstance: pool, // pg Pool
+    tableName: 'ChatMessage',
+    columnMap: {
+      sessionId: 'sessionId',
+      role: 'role',
+      content: 'content',
+      createdAt: 'createdAt'
+    }
+  }
+}
+```
 
 ---
 
@@ -455,7 +537,48 @@ Lifecycle hooks:
 
 ---
 
-## 14. Database Schemas & Indexing
+## 14. Telemetry
+
+Vectra collects anonymous usage data to help us improve the SDK, prioritize features, and detect broken versions.
+
+### What we track
+
+* **Identity**: A random UUID (`distinct_id`) stored locally in `~/.vectra/telemetry.json`. **No PII, emails, IPs, or hostnames.**
+* **Events**:
+    * `sdk_initialized`: Config shape (providers used), OS/Runtime version, session type (api/cli/chat).
+    * `ingest_started/completed`: Source type, chunking strategy, duration bucket, chunk count bucket.
+    * `query_executed`: Retrieval strategy, query mode (rag), result count, latency bucket.
+    * `feature_used`: WebConfig/Dashboard usage.
+    * `evaluation_run`: Dataset size bucket.
+    * `error_occurred`: Error type and stage (no stack traces).
+    * `cli_command_used`: Command name and flags.
+
+### Why we track it
+
+* **Detect broken versions**: Spikes in `error_occurred` help us find bugs.
+* **Measure adoption**: Helps us understand which providers (OpenAI vs Gemini) and vector stores are most popular.
+* **Drop support safely**: We can see if anyone is still using Node 18 before dropping it.
+
+### How to opt-out
+
+Telemetry is **enabled by default**. To disable it:
+
+**Option 1: Config**
+
+```js
+const client = new VectraClient({
+  // ...
+  telemetry: { enabled: false }
+});
+```
+
+**Option 2: Environment Variable**
+
+Set `VECTRA_TELEMETRY_DISABLED=1` or `DO_NOT_TRACK=1`.
+
+---
+
+## 15. Database Schemas & Indexing
 
 ```prisma
 model Document {
@@ -469,7 +592,7 @@ model Document {
 
 ---
 
-## 15. Extending Vectra
+## 16. Extending Vectra
 
 ### Custom Vector Store
 
@@ -482,7 +605,7 @@ class MyStore extends VectorStore {
 
 ---
 
-## 16. Architecture Overview
+## 17. Architecture Overview
 
 * `VectraClient`: orchestrator
 * Typed config schema
@@ -491,7 +614,7 @@ class MyStore extends VectorStore {
 
 ---
 
-## 17. Development & Contribution Guide
+## 18. Development & Contribution Guide
 
 * Node.js 18+
 * pnpm recommended
@@ -499,7 +622,7 @@ class MyStore extends VectorStore {
 
 ---
 
-## 18. Production Best Practices
+## 19. Production Best Practices
 
 * Match embedding dimensions to pgvector
 * Prefer HYBRID retrieval
