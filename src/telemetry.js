@@ -114,12 +114,10 @@ class TelemetryManager {
       await fetch(API_ENDPOINT, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer sb_publishable__O2ZcJYtRd_XXSbC-T-9cg_KPZAa_Jv',
-          'apikey': 'sb_publishable__O2ZcJYtRd_XXSbC-T-9cg_KPZAa_Jv',
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify(batch), // ✅ FIX: send array directly
-        signal: AbortSignal.timeout(8000),
+        body: JSON.stringify(batch), 
+        signal: AbortSignal.timeout(6000),
       });
 
       if (process.env.VECTRA_TELEMETRY_DEBUG) {
