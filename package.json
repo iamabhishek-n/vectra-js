@@ -51,7 +51,7 @@
   },
   "devDependencies": {
     "eslint": "^9.39.2",
-    "globals": "^16.5.0",
+    "globals": "^17.0.0",
     "prisma": "^7.2.0"
   },
   "pnpm": {
