@@ -10,7 +10,7 @@ importers:
     dependencies:
       '@anthropic-ai/sdk':
         specifier: ^0.71.2
-        version: 0.71.2(zod@3.25.76)
+        version: 0.71.2(zod@4.3.5)
       '@google/genai':
         specifier: ^1.34.0
         version: 1.34.0
@@ -25,7 +25,7 @@ importers:
         version: 1.11.0
       openai:
         specifier: ^6.15.0
-        version: 6.15.0(ws@8.18.3)(zod@3.25.76)
+        version: 6.15.0(ws@8.18.3)(zod@4.3.5)
       pdf-parse:
         specifier: ^2.4.5
         version: 2.4.5
@@ -42,8 +42,8 @@ importers:
         specifier: ^0.18.5
         version: 0.18.5
       zod:
-        specifier: ^3.25.76
-        version: 3.25.76
+        specifier: ^4.3.5
+        version: 4.3.5
     devDependencies:
       eslint:
         specifier: ^9.39.2
@@ -1556,16 +1556,16 @@ packages:
   zeptomatch@2.0.2:
     resolution: {integrity: sha512-H33jtSKf8Ijtb5BW6wua3G5DhnFjbFML36eFu+VdOoVY4HD9e7ggjqdM6639B+L87rjnR6Y+XeRzBXZdy52B/g==}
 
-  zod@3.25.76:
-    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
+  zod@4.3.5:
+    resolution: {integrity: sha512-k7Nwx6vuWx1IJ9Bjuf4Zt1PEllcwe7cls3VNzm4CQ1/hgtFUK2bRNG3rvnpPUhFjmqJKAKtjV576KnUkHocg/g==}
 
 snapshots:
 
-  '@anthropic-ai/sdk@0.71.2(zod@3.25.76)':
+  '@anthropic-ai/sdk@0.71.2(zod@4.3.5)':
     dependencies:
       json-schema-to-ts: 3.1.1
     optionalDependencies:
-      zod: 3.25.76
+      zod: 4.3.5
 
   '@babel/runtime@7.28.4': {}
 
@@ -2687,10 +2687,10 @@ snapshots:
     dependencies:
       wrappy: 1.0.2
 
-  openai@6.15.0(ws@8.18.3)(zod@3.25.76):
+  openai@6.15.0(ws@8.18.3)(zod@4.3.5):
     optionalDependencies:
       ws: 8.18.3
-      zod: 3.25.76
+      zod: 4.3.5
 
   option@0.2.4: {}
 
@@ -3147,4 +3147,4 @@ snapshots:
     dependencies:
       grammex: 3.1.12
 
-  zod@3.25.76: {}
+  zod@4.3.5: {}
