@@ -45,6 +45,28 @@ class MilvusVectorStore extends VectorStore {
     return rows.map((r) => ({ id: r.id, content: r.content || '', metadata: r.metadata ? JSON.parse(r.metadata) : {} }));
   }
 
+  async fileExists(sha256, size, lastModified) {
+    if (typeof this.client.query !== 'function') return false;
+    try {
+      const expr = '';
+      const res = await this.client.query({
+        collection_name: this.collection,
+        expr,
+        output_fields: ['content', 'metadata'],
+        limit: 1
+      });
+      const rows = Array.isArray(res) ? res : (res?.data || res?.results || []);
+      return rows.some((r) => {
+        try {
+          const m = r.metadata ? JSON.parse(r.metadata) : {};
+          return m.fileSHA256 === sha256 && m.fileSize === size && m.lastModified === lastModified;
+        } catch (_) { return false; }
+      });
+    } catch (_) {
+      return false;
+    }
+  }
+
   async deleteDocuments({ ids = null, filter = null } = {}) {
     if (typeof this.client.delete !== 'function') throw new Error('deleteDocuments is not supported for this Milvus client');
     if (Array.isArray(ids) && ids.length > 0) {

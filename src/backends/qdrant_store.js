@@ -52,6 +52,16 @@ class QdrantVectorStore extends VectorStore {
     }
     return out;
   }
+  async fileExists(sha256, size, lastModified) {
+    const filter = this.normalizeFilter({ fileSHA256: sha256, fileSize: size, lastModified });
+    try {
+      const res = await this.client.scroll(this.collection, { limit: 1, filter });
+      const points = res?.points || res?.result?.points || [];
+      return points.length > 0;
+    } catch (_) {
+      return false;
+    }
+  }
   async deleteDocuments({ ids = null, filter = null } = {}) {
     if (typeof this.client.delete !== 'function') throw new Error('deleteDocuments is not supported for this Qdrant client');
     if (Array.isArray(ids) && ids.length > 0) {

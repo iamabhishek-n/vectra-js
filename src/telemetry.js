@@ -103,7 +103,7 @@ class TelemetryManager {
 
     const batch = this.queue.splice(0, this.queue.length);
 
-    if (!global.fetch || !SUPABASE_ANON_KEY) {
+    if (!global.fetch) {
       if (process.env.VECTRA_TELEMETRY_DEBUG) {
         console.log('Telemetry batch (debug):', batch);
       }

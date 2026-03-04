@@ -24,9 +24,11 @@ class PostgresVectorStore extends VectorStore {
     const tableName = config.tableName || 'document';
     const columnMap = config.columnMap || {};
     this._table = quoteTableName(tableName, 'tableName');
+    this._tableBase = tableName.split('.').pop();
     this._cContent = quoteIdentifier(columnMap.content || 'content', 'columnMap.content');
     this._cMeta = quoteIdentifier(columnMap.metadata || 'metadata', 'columnMap.metadata');
     this._cVec = quoteIdentifier(columnMap.vector || 'vector', 'columnMap.vector');
+    this._cCreatedAt = '"createdAt"';
     
     // We expect config.clientInstance to be a pg.Pool or pg.Client
     if (!this.config.clientInstance) {
@@ -45,7 +47,34 @@ class PostgresVectorStore extends VectorStore {
     // Enable pgvector extension
     await this.client.query('CREATE EXTENSION IF NOT EXISTS vector');
     
-    // Create table if not exists
+    // Detect existing column type to avoid malformed array issues
+    try {
+      const typeCheck = await this.client.query(
+        `SELECT data_type, udt_name 
+         FROM information_schema.columns 
+         WHERE table_name = $1 AND column_name = $2`,
+        [this._tableBase, this._cVec.replace(/"/g, '')]
+      );
+      const row = typeCheck.rows[0];
+      if (row) {
+        const isPgVector = row.udt_name === 'vector';
+        const isArray = row.data_type && row.data_type.toLowerCase().includes('array');
+        if (isArray && !isPgVector) {
+          throw new Error(
+            'Postgres schema mismatch: vector column is double precision[] (array). ' +
+            'Use pgvector type: vector(<dimensions>). ' +
+            'Example: ALTER TABLE ' + this._table + ' ALTER COLUMN ' + this._cVec + ' TYPE vector(1536);'
+          );
+        }
+      }
+    } catch (e) {
+      // Only throw if we explicitly detected array type; otherwise continue
+      if (String(e.message || e).includes('schema mismatch')) {
+        throw e;
+      }
+    }
+    
+    // Create table if not exists (best-effort)
     // Note: We need to know vector dimensions. We'll try to guess or use default 1536
     // If embedding dimensions are provided in config, use them
     // But store config usually doesn't have embedding config directly unless passed down
@@ -65,6 +94,47 @@ class PostgresVectorStore extends VectorStore {
     `;
     await this.client.query(createTableQuery);
     
+    // Ensure required columns exist (non-destructive)
+    try {
+      const res = await this.client.query(
+        `SELECT column_name, data_type, udt_name 
+         FROM information_schema.columns 
+         WHERE table_name = $1`,
+        [this._tableBase]
+      );
+      const cols = new Map(res.rows.map(r => [r.column_name, r]));
+      const contentCol = this._cContent.replace(/"/g, '');
+      const metaCol = this._cMeta.replace(/"/g, '');
+      const vecCol = this._cVec.replace(/"/g, '');
+      const createdAtCol = this._cCreatedAt.replace(/"/g, '');
+      
+      if (!cols.has(contentCol)) {
+        await this.client.query(`ALTER TABLE ${this._table} ADD COLUMN ${this._cContent} TEXT`);
+      }
+      if (!cols.has(metaCol)) {
+        await this.client.query(`ALTER TABLE ${this._table} ADD COLUMN ${this._cMeta} JSONB`);
+      }
+      if (!cols.has(vecCol)) {
+        await this.client.query(`ALTER TABLE ${this._table} ADD COLUMN ${this._cVec} vector(${dim})`);
+      } else {
+        const vinfo = cols.get(vecCol);
+        const isPgVector = vinfo && vinfo.udt_name === 'vector';
+        const isArray = vinfo && vinfo.data_type && vinfo.data_type.toLowerCase().includes('array');
+        if (isArray && !isPgVector) {
+          throw new Error(
+            'Postgres schema mismatch: vector column is double precision[] (array). ' +
+            'Use pgvector type: vector(' + dim + '). ' +
+            'Example: ALTER TABLE ' + this._table + ' ALTER COLUMN ' + this._cVec + ' TYPE vector(' + dim + ');'
+          );
+        }
+      }
+      if (!cols.has(createdAtCol)) {
+        await this.client.query(`ALTER TABLE ${this._table} ADD COLUMN ${this._cCreatedAt} TIMESTAMP WITH TIME ZONE DEFAULT NOW()`);
+      }
+    } catch (_) {
+      // best-effort; ignore
+    }
+    
     // Create HNSW index for faster search
     // checking if index exists is hard in raw sql cross-version, 
     // simpler to CREATE INDEX IF NOT EXISTS which pg supports in recent versions
@@ -72,12 +142,17 @@ class PostgresVectorStore extends VectorStore {
     try {
         await this.client.query(`CREATE INDEX IF NOT EXISTS "${this._table.replace(/"/g, '')}_vec_idx" ON ${this._table} USING hnsw (${this._cVec} vector_cosine_ops)`);
     } catch (e) {
-        console.warn('Could not create vector index (might be fine if not supported):', e.message);
+        // Fallback to ivfflat when hnsw not supported
+        try {
+          await this.client.query(`CREATE INDEX IF NOT EXISTS "${this._table.replace(/"/g, '')}_vec_idx" ON ${this._table} USING ivfflat (${this._cVec} vector_cosine_ops)`);
+        } catch (e2) {
+          console.warn('Could not create vector index (might be fine if not supported):', e.message);
+        }
     }
   }
 
   async addDocuments(docs) {
-    const q = `INSERT INTO ${this._table} ("id", ${this._cContent}, ${this._cMeta}, ${this._cVec}, "createdAt") VALUES ($1, $2, $3, $4, NOW())`;
+    const q = `INSERT INTO ${this._table} ("id", ${this._cContent}, ${this._cMeta}, ${this._cVec}, "createdAt") VALUES ($1, $2, $3, $4, NOW()) ON CONFLICT ("id") DO NOTHING`;
     
     for (const doc of docs) {
       const id = doc.id || uuidv4();
@@ -185,6 +260,22 @@ class PostgresVectorStore extends VectorStore {
     add(lexical, 1);
     
     return Object.values(combined).sort((a, b) => b.score - a.score).slice(0, limit);
+  }
+  
+  async fileExists(sha256, size, lastModified) {
+    try {
+      const q = `
+        SELECT 1 
+        FROM ${this._table} 
+        WHERE ${this._cMeta} @> $1 
+        LIMIT 1
+      `;
+      const metaFilter = JSON.stringify({ fileSHA256: sha256, fileSize: size, lastModified });
+      const res = await this.client.query(q, [metaFilter]);
+      return res.rowCount > 0;
+    } catch (_) {
+      return false;
+    }
   }
 }
 

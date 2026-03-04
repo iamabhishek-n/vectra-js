@@ -35,7 +35,7 @@ class PrismaVectorStore extends VectorStore {
   }
   async addDocuments(docs) {
     const { clientInstance } = this.config;
-    const q = `INSERT INTO ${this._table} ("id", ${this._cContent}, ${this._cMeta}, ${this._cVec}, "createdAt") VALUES ($1, $2, $3, $4::vector, NOW())`;
+    const q = `INSERT INTO ${this._table} ("id", ${this._cContent}, ${this._cMeta}, ${this._cVec}, "createdAt") VALUES ($1, $2, $3, $4::vector, NOW()) ON CONFLICT ("id") DO NOTHING`;
     for (const doc of docs) {
         const id = doc.id || uuidv4();
         const vec = JSON.stringify(this.normalizeVector(doc.embedding));
@@ -108,10 +108,59 @@ class PrismaVectorStore extends VectorStore {
     const idxFts = `"${base}_content_fts_gin"`;
     try {
       await clientInstance.$executeRawUnsafe('CREATE EXTENSION IF NOT EXISTS vector');
+      await this._ensureColumns();
       await clientInstance.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ${idxVec} ON ${this._table} USING ivfflat (${this._cVec} vector_cosine_ops) WITH (lists = 100);`);
       await clientInstance.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ${idxFts} ON ${this._table} USING GIN (to_tsvector('english', ${this._cContent}));`);
     } catch (e) {
       // Best-effort; indexes are optional
+    }
+  }
+  
+  async _ensureColumns() {
+    const { clientInstance } = this.config;
+    const dim = 1536;
+    const createTableQuery = `
+      CREATE TABLE IF NOT EXISTS ${this._table} (
+        "id" TEXT PRIMARY KEY,
+        ${this._cContent} TEXT,
+        ${this._cMeta} JSONB,
+        ${this._cVec} vector(${dim}),
+        "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `;
+    await clientInstance.$executeRawUnsafe(createTableQuery);
+    try {
+      const res = await clientInstance.$queryRawUnsafe(
+        `SELECT column_name, data_type, udt_name FROM information_schema.columns WHERE table_name = $1`,
+        this._tableBase
+      );
+      const cols = new Map(res.map(r => [r.column_name, r]));
+      const contentCol = this._cContent.replace(/"/g, '');
+      const metaCol = this._cMeta.replace(/"/g, '');
+      const vecCol = this._cVec.replace(/"/g, '');
+      const createdAtCol = 'createdAt';
+      if (!cols.has(contentCol)) {
+        await clientInstance.$executeRawUnsafe(`ALTER TABLE ${this._table} ADD COLUMN ${this._cContent} TEXT`);
+      }
+      if (!cols.has(metaCol)) {
+        await clientInstance.$executeRawUnsafe(`ALTER TABLE ${this._table} ADD COLUMN ${this._cMeta} JSONB`);
+      }
+      if (!cols.has(vecCol)) {
+        await clientInstance.$executeRawUnsafe(`ALTER TABLE ${this._table} ADD COLUMN ${this._cVec} vector(${dim})`);
+      } else {
+        const vinfo = cols.get(vecCol);
+        const isPgVector = vinfo && vinfo.udt_name === 'vector';
+        const isArray = vinfo && vinfo.data_type && vinfo.data_type.toLowerCase().includes('array');
+        if (isArray && !isPgVector) {
+          throw new Error(
+            'Postgres schema mismatch: vector column is double precision[] (array). Use pgvector type: vector(' + dim + '). Example: ALTER TABLE ' + this._table + ' ALTER COLUMN ' + this._cVec + ' TYPE vector(' + dim + ');'
+          );
+        }
+      }
+      if (!cols.has(createdAtCol)) {
+        await clientInstance.$executeRawUnsafe(`ALTER TABLE ${this._table} ADD COLUMN "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()`);
+      }
+    } catch (_) {
     }
   }
   
