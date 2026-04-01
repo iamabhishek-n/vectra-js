@@ -1,3 +1,5 @@
+const https = require('https');
+
 class HuggingFaceBackend {
   constructor(config) {
     this.config = config;
@@ -7,16 +9,41 @@ class HuggingFaceBackend {
   }
 
   async _post(model, payload) {
-    const res = await fetch(`${this.baseUrl}/${encodeURIComponent(model)}`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+    return new Promise((resolve, reject) => {
+      const data = JSON.stringify(payload);
+      const url = new URL(`${this.baseUrl}/${encodeURIComponent(model)}`);
+      
+      const options = {
+        hostname: url.hostname,
+        path: url.pathname + url.search,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(data)
+        }
+      };
+
+      const req = https.request(options, (res) => {
+        let body = '';
+        res.on('data', (chunk) => body += chunk);
+        res.on('end', () => {
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            reject(new Error(`HF error ${res.statusCode}: ${body}`));
+          } else {
+            try {
+              resolve(JSON.parse(body));
+            } catch(e) {
+              resolve(body);
+            }
+          }
+        });
+      });
+
+      req.on('error', reject);
+      req.write(data);
+      req.end();
     });
-    if (!res.ok) {
-      const t = await res.text();
-      throw new Error(`HF error ${res.status}: ${t}`);
-    }
-    return await res.json();
   }
 
   async embedDocuments(texts) {
