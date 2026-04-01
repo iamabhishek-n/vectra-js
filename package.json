@@ -1,6 +1,6 @@
 {
   "name": "vectra-js",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A production-ready, provider-agnostic Node.js SDK for End-to-End RAG pipelines.",
   "main": "index.js",
   "scripts": {
@@ -30,6 +30,20 @@
   "bugs": {
     "url": "https://github.com/iamabhishek-n/vectra-js/issues"
   },
+  "files": [
+    "bin/vectra.js",
+    "src",
+    "index.js",
+    "LICENSE",
+    "README.md",
+    "package.json",
+    "package-lock.json",
+    "occupy_port.js",
+    "documentation.md",
+    "examples",
+    "docs",
+    "eslint.config.js"
+  ],
   "homepage": "https://github.com/iamabhishek-n/vectra-js#readme",
   "author": "Abhishek N",
   "license": "GPL-3.0",
