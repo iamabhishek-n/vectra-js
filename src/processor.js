@@ -13,6 +13,7 @@ class DocumentProcessor {
   }
 
   async loadDocument(filePath) {
+    this._lastPages = null;
     const ext = path.extname(filePath).toLowerCase();
     const buffer = await fs.promises.readFile(filePath);
     if (ext === '.pdf') {
@@ -73,25 +74,53 @@ class DocumentProcessor {
   }
 
   recursiveSplit(text) {
-    const chunks = [];
     const sizeChars = Math.max(500, this.config.chunkSize || 1000);
     const baseOverlap = Math.max(0, this.config.chunkOverlap || 200);
-    const sentences = text.split(/(?<=[.!?])\s+/);
-    let current = '';
-    for (const s of sentences) {
-      const candidate = current.length ? current + ' ' + s : s;
-      if (candidate.length >= sizeChars) {
-        const entropy = this._entropy(candidate);
-        const overlap = Math.min(baseOverlap + Math.floor(entropy * 50), Math.floor(sizeChars / 3));
-        chunks.push(candidate);
-        // create overlap window from end of candidate
-        current = candidate.slice(Math.max(0, candidate.length - overlap));
-      } else {
-        current = candidate;
+    
+    // 1. Page Splitting (for PDFs)
+    let topLevelSplits = [];
+    if (this._lastPages && Array.isArray(this._lastPages)) {
+      topLevelSplits = this._lastPages.filter(p => p && p.trim().length > 0);
+    } else {
+      // 2. Markdown/Format Splitting
+      // Split by headers, code blocks, or tables
+      topLevelSplits = text.split(/^(?:#{1,6}\s+.*|```[\s\S]*?```|\|.*\|.*\|)/m);
+      topLevelSplits = topLevelSplits.map(s => s.trim()).filter(s => s.length > 0);
+      if (topLevelSplits.length === 0) topLevelSplits = [text];
+    }
+
+    const finalChunks = [];
+    let currentChunk = "";
+
+    for (const block of topLevelSplits) {
+      // 3. Improved Sentence Splitting Regex
+      // Avoids decimals (3.14) and common abbreviations (Dr. Smith)
+      const sentences = block.split(/(?<!\d)\.(?!\d)(?=\s+[A-Z])|(?<=[!?])\s+/);
+
+      for (let s of sentences) {
+        s = s.trim();
+        if (!s) continue;
+        const candidate = currentChunk ? currentChunk + ' ' + s : s;
+        
+        if (candidate.length >= sizeChars) {
+          if (currentChunk) {
+            const entropy = this._entropy(currentChunk);
+            const overlap = Math.min(baseOverlap + Math.floor(entropy * 50), Math.floor(sizeChars / 3));
+            finalChunks.push(currentChunk);
+            currentChunk = currentChunk.slice(Math.max(0, currentChunk.length - overlap)) + " " + s;
+          } else {
+            // Single sentence too long - push it
+            finalChunks.push(s);
+            currentChunk = "";
+          }
+        } else {
+          currentChunk = candidate;
+        }
       }
     }
-    if (current) chunks.push(current);
-    return chunks;
+
+    if (currentChunk) finalChunks.push(currentChunk);
+    return finalChunks;
   }
 
   _entropy(str) {

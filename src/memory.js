@@ -1,3 +1,10 @@
+const safeIdent = (name) => {
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
+    throw new Error(`Invalid SQL identifier: ${name}`);
+  }
+  return name;
+};
+
 class InMemoryHistory {
   constructor(maxMessages = 20) {
     this.sessions = new Map();
@@ -58,9 +65,19 @@ class RedisHistory {
 class PostgresHistory {
   constructor(client, tableName = 'ChatMessage', columnMap = { sessionId: 'sessionId', role: 'role', content: 'content', createdAt: 'createdAt' }, maxMessages = 20) {
     this.client = client;
-    this.tableName = tableName;
-    this.columnMap = columnMap;
+    this.tableName = safeIdent(tableName);
+    this.columnMap = {};
+    for (const [k, v] of Object.entries(columnMap)) {
+      this.columnMap[k] = safeIdent(v);
+    }
     this.maxMessages = maxMessages;
+  }
+  async _withConn(fn) {
+    if (typeof this.client.connect === 'function') {
+      const c = await this.client.connect();
+      try { return await fn(c); } finally { c.release(); }
+    }
+    return fn(this.client);
   }
   async addMessage(sessionId, role, content) {
     if (!sessionId || !this.client) return;
@@ -68,11 +85,13 @@ class PostgresHistory {
     const c = this.columnMap;
     const q = `INSERT INTO "${t}" ("${c.sessionId}","${c.role}","${c.content}","${c.createdAt}") VALUES ($1,$2,$3,NOW())`;
     try {
-      if (typeof this.client.$executeRawUnsafe === 'function') {
-        await this.client.$executeRawUnsafe(q, sessionId, role, content);
-      } else if (typeof this.client.execute_raw === 'function') {
-        await this.client.execute_raw(q, sessionId, role, content);
-      }
+      await this._withConn(async (conn) => {
+        if (typeof conn.$executeRawUnsafe === 'function') {
+          await conn.$executeRawUnsafe(q, sessionId, role, content);
+        } else if (typeof conn.query === 'function') {
+          await conn.query(q, [sessionId, role, content]);
+        }
+      });
     } catch (_) {}
   }
   async getRecent(sessionId, n = 10) {
@@ -81,12 +100,15 @@ class PostgresHistory {
     const c = this.columnMap;
     const q = `SELECT "${c.role}" as role, "${c.content}" as content FROM "${t}" WHERE "${c.sessionId}" = $1 ORDER BY "${c.createdAt}" DESC LIMIT ${Math.max(1, n)}`;
     try {
-      let rows = [];
-      if (typeof this.client.$queryRawUnsafe === 'function') {
-        rows = await this.client.$queryRawUnsafe(q, sessionId);
-      } else if (typeof this.client.query_raw === 'function') {
-        rows = await this.client.query_raw(q, sessionId);
-      }
+      let rows = await this._withConn(async (conn) => {
+        if (typeof conn.$queryRawUnsafe === 'function') {
+          return await conn.$queryRawUnsafe(q, sessionId);
+        } else if (typeof conn.query === 'function') {
+          const res = await conn.query(q, [sessionId]);
+          return res.rows;
+        }
+        return [];
+      });
       return Array.isArray(rows) ? rows.reverse().map(r => ({ role: r.role, content: r.content })) : [];
     } catch (_) {
       return [];

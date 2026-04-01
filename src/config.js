@@ -22,6 +22,13 @@ const RetrievalStrategy = {
   MMR: 'mmr'
 };
 
+const RerankingProvider = {
+  LLM: 'llm',
+  CROSS_ENCODER: 'cross-encoder',
+  COHERE: 'cohere',
+  JINA: 'jina'
+};
+
 const EmbeddingConfigSchema = z.object({
   provider: z.nativeEnum(ProviderType),
   apiKey: z.string().optional(),
@@ -52,8 +59,10 @@ const ChunkingConfigSchema = z.object({
 
 const RerankingConfigSchema = z.object({
     enabled: z.boolean().default(false),
-    provider: z.literal('llm').default('llm'),
+    provider: z.nativeEnum(RerankingProvider).default(RerankingProvider.LLM),
     llmConfig: LLMConfigSchema.optional(),
+    modelName: z.string().optional(),
+    apiKey: z.string().optional(),
     topN: z.number().default(5),
     windowSize: z.number().default(20)
 });
@@ -68,6 +77,14 @@ const RetrievalConfigSchema = z.object({
     if ((data.strategy === RetrievalStrategy.HYDE || data.strategy === RetrievalStrategy.MULTI_QUERY) && !data.llmConfig) return false;
     return true;
 }, { message: "llmConfig required for advanced retrieval", path: ["llmConfig"] });
+
+const GuardrailConfigSchema = z.object({
+  blockPii: z.boolean().default(false),
+  blockOffTopic: z.boolean().default(false),
+  maxQueryLength: z.number().default(2000),
+  contentFilter: z.boolean().default(false),
+  hallucinationCheck: z.boolean().default(false)
+});
 
 const DatabaseConfigSchema = z.object({
   type: z.string(), // 'prisma', 'chroma', etc.
@@ -117,7 +134,9 @@ const RAGConfigSchema = z.object({
   generation: z.object({ structuredOutput: z.enum(['none','citations']).default('none'), outputFormat: z.enum(['text','json']).default('text') }).optional(),
   prompts: z.object({ query: z.string().optional(), reranking: z.string().optional() }).optional(),
   tracing: z.object({ enable: z.boolean().default(false) }).optional(),
-  callbacks: z.array(z.custom((_) => true)).optional(), 
+  maxCacheSize: z.number().default(10000),
+  callbacks: z.array(z.custom((_) => true)).optional(),
+  middlewares: z.array(z.custom((_) => true)).default([]),
   observability: z.object({
     enabled: z.boolean().default(false),
     sqlitePath: z.string().default('vectra-observability.db'),
@@ -126,11 +145,13 @@ const RAGConfigSchema = z.object({
     trackTraces: z.boolean().default(true),
     trackLogs: z.boolean().default(true),
     sessionTracking: z.boolean().default(true)
-  }).default({})
+  }).default({}),
+  guardrails: GuardrailConfigSchema.default({})
 });
 
 module.exports = {
-  ProviderType, ChunkingStrategy, RetrievalStrategy,
+  ProviderType, ChunkingStrategy, RetrievalStrategy, RerankingProvider,
   EmbeddingConfigSchema, LLMConfigSchema, ChunkingConfigSchema,
-  RetrievalConfigSchema, RerankingConfigSchema, DatabaseConfigSchema, RAGConfigSchema
+  RetrievalConfigSchema, RerankingConfigSchema, DatabaseConfigSchema, RAGConfigSchema,
+  GuardrailConfigSchema
 };

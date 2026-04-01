@@ -30,27 +30,25 @@ class QdrantVectorStore extends VectorStore {
     return res.map(r => ({ content: r.payload.content, metadata: r.payload.metadata, score: r.score }));
   }
   async hybridSearch(text, vector, limit = 5, filter = null) { return this.similaritySearch(vector, limit, filter); }
-  async listDocuments({ filter = null, limit = 100, offset = 0 } = {}) {
+  async listDocuments({ filter = null, limit = 100, cursor = null } = {}) {
     if (typeof this.client.scroll !== 'function') throw new Error('listDocuments is not supported for this Qdrant client');
     const qFilter = this.normalizeFilter(filter);
-    const lim = Math.max(1, Math.min(1000, Number(limit) || 100));
-    const off = Math.max(0, Number(offset) || 0);
-    let skipped = 0;
-    const out = [];
-    let nextOffset = undefined;
-    while (out.length < lim) {
-      const res = await this.client.scroll(this.collection, { limit: Math.min(256, lim), filter: qFilter, offset: nextOffset });
-      const points = res?.points || res?.result?.points || [];
-      nextOffset = res?.next_page_offset || res?.result?.next_page_offset || res?.next_page_offset;
-      if (!points.length) break;
-      for (const p of points) {
-        if (skipped < off) { skipped++; continue; }
-        out.push({ id: p.id, content: p.payload?.content, metadata: p.payload?.metadata });
-        if (out.length >= lim) break;
-      }
-      if (!nextOffset) break;
-    }
-    return out;
+    const lim = Math.max(1, Number(limit) || 100);
+    const res = await this.client.scroll(this.collection, { 
+      limit: lim, 
+      filter: qFilter, 
+      offset: cursor || undefined,
+      with_payload: true,
+      with_vector: false
+    });
+    const points = res?.points || res?.result?.points || [];
+    const nextCursor = res?.next_page_offset || res?.result?.next_page_offset;
+    const docs = points.map(p => ({
+      id: p.id,
+      content: p.payload?.content,
+      metadata: p.payload?.metadata
+    }));
+    return { documents: docs, nextCursor };
   }
   async fileExists(sha256, size, lastModified) {
     const filter = this.normalizeFilter({ fileSHA256: sha256, fileSize: size, lastModified });

@@ -13,13 +13,44 @@ const { ChromaVectorStore } = require('./backends/chroma_store');
 const { PostgresVectorStore } = require('./backends/postgres_store');
 const { QdrantVectorStore } = require('./backends/qdrant_store');
 const { MilvusVectorStore } = require('./backends/milvus_store');
-const { LLMReranker } = require('./reranker');
+const { getReranker } = require('./reranker');
 const { InMemoryHistory, RedisHistory, PostgresHistory } = require('./memory');
 const { OllamaBackend } = require('./backends/ollama');
 const { v5: uuidv5 } = require('uuid');
 const { v4: uuidv4 } = require('uuid');
 const SQLiteLogger = require('./observability');
 const telemetry = require('./telemetry');
+const EventEmitter = require('events');
+
+class LRUCache {
+  constructor(maxSize = 10000) {
+    this.cache = new Map();
+    this.maxSize = maxSize;
+  }
+
+  get(key) {
+    if (!this.cache.has(key)) return undefined;
+    const val = this.cache.get(key);
+    this.cache.delete(key);
+    this.cache.set(key, val);
+    return val;
+  }
+
+  set(key, value) {
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    }
+    this.cache.set(key, value);
+    if (this.cache.size > this.maxSize) {
+      const firstKey = this.cache.keys().next().value;
+      this.cache.delete(firstKey);
+    }
+  }
+
+  has(key) {
+    return this.cache.has(key);
+  }
+}
 
 const DEFAULT_TOKEN_BUDGET = 2048;
 const DEFAULT_PREFER_SUMMARY_BELOW = 1024;
@@ -38,6 +69,7 @@ class VectraClient {
     const parsed = RAGConfigSchema.parse(config);
     this.config = parsed;
     this.callbacks = config.callbacks || [];
+    this.middlewares = config.middlewares || [];
 
     // Initialize telemetry
     telemetry.init(this.config);
@@ -72,7 +104,7 @@ class VectraClient {
 
     // Initialize vector store
     this.vectorStore = this.createVectorStore(this.config.database);
-    this._embeddingCache = new Map();
+    this._embeddingCache = new LRUCache(this.config.maxCacheSize || 10000);
     this._metadataEnrichmentEnabled = !!(this.config.metadata && this.config.metadata.enrichment);
     const mm = this.config.memory?.maxMessages || DEFAULT_MEMORY_MESSAGES;
     if (this.config.memory && this.config.memory.enabled) {
@@ -103,7 +135,7 @@ class VectraClient {
         const rerankLlm = this.config.reranking.llmConfig 
             ? this.createLLM(this.config.reranking.llmConfig) 
             : this.llm;
-        this.reranker = new LLMReranker(rerankLlm, this.config.reranking);
+        this.reranker = getReranker(this.config.reranking, rerankLlm);
     }
   }
 
@@ -137,44 +169,77 @@ class VectraClient {
     });
   }
 
-  async _enrichChunkMetadata(chunks) {
-    const enriched = [];
-    for (const c of chunks) {
-      try {
-        const prompt = `Summarize and extract keywords and questions from the following text. Return STRICT JSON with keys: summary (string), keywords (array of strings), hypothetical_questions (array of strings).\nText:\n${c}`;
-        const out = await this.llm.generate(prompt, 'You are a helpful assistant that returns valid JSON only.');
-        const clean = String(out).replace(/```json/g, '').replace(/```/g, '').trim();
-        const parsed = JSON.parse(clean);
-        const summary = typeof parsed.summary === 'string' ? parsed.summary : '';
-        const keywords = Array.isArray(parsed.keywords) ? parsed.keywords : [];
-        const hqs = Array.isArray(parsed.hypothetical_questions) ? parsed.hypothetical_questions : [];
-        enriched.push({ summary, keywords, hypothetical_questions: hqs });
-      } catch (_) {
-        const words = c.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 3);
-        const freq = {};
-        for (const w of words) freq[w] = (freq[w] || 0) + 1;
-        const top = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,DEFAULT_KEYWORD_COUNT).map(([w])=>w);
-        const summary = c.slice(0, DEFAULT_FALLBACK_SUMMARY_LENGTH);
-        enriched.push({ summary, keywords: top, hypothetical_questions: [] });
+  async runMiddlewares(methodName, ...args) {
+    if (!this.middlewares || this.middlewares.length === 0) {
+      return args.length === 1 ? args[0] : args;
+    }
+    let currentArgs = args;
+    for (const mw of this.middlewares) {
+      if (typeof mw[methodName] === 'function') {
+        const res = await mw[methodName](...currentArgs);
+        if (currentArgs.length > 1) {
+          currentArgs = Array.isArray(res) ? res : [res];
+        } else {
+          currentArgs = [res];
+        }
       }
     }
-    return enriched;
+    return currentArgs.length === 1 ? currentArgs[0] : currentArgs;
+  }
+
+  async _enrichChunkMetadata(chunks, concurrency = 5) {
+    const results = new Array(chunks.length);
+    let index = 0;
+    
+    const worker = async () => {
+      while (index < chunks.length) {
+        const i = index++;
+        const c = chunks[i];
+        try {
+          const prompt = `Summarize and extract keywords and questions from the following text. Return STRICT JSON with keys: summary (string), keywords (array of strings), hypothetical_questions (array of strings).\nText:\n${c}`;
+          const out = await this.llm.generate(prompt, 'You are a helpful assistant that returns valid JSON only.');
+          const clean = String(out).replace(/```json/g, '').replace(/```/g, '').trim();
+          const parsed = JSON.parse(clean);
+          results[i] = {
+            summary: typeof parsed.summary === 'string' ? parsed.summary : '',
+            keywords: Array.isArray(parsed.keywords) ? parsed.keywords : [],
+            hypothetical_questions: Array.isArray(parsed.hypothetical_questions) ? parsed.hypothetical_questions : []
+          };
+        } catch (_) {
+          const words = c.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 3);
+          const freq = {};
+          for (const w of words) freq[w] = (freq[w] || 0) + 1;
+          const top = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,DEFAULT_KEYWORD_COUNT).map(([w])=>w);
+          const summary = c.slice(0, DEFAULT_FALLBACK_SUMMARY_LENGTH);
+          results[i] = { summary, keywords: top, hypothetical_questions: [] };
+        }
+      }
+    };
+    
+    const workers = [];
+    for (let i = 0; i < Math.min(concurrency, chunks.length); i++) {
+      workers.push(worker());
+    }
+    await Promise.all(workers);
+    return results;
   }
 
   async _batchEmbedChunks(toEmbed, mapIndex, hashes) {
-    const newEmbeds = [];
+    const newEmbeds = new Array(toEmbed.length);
     if (toEmbed.length > 0) {
       const enabled = !!(this.config.ingestion && this.config.ingestion.rateLimitEnabled);
       const defaultLimit = (this.config.ingestion && typeof this.config.ingestion.concurrencyLimit === 'number') ? this.config.ingestion.concurrencyLimit : DEFAULT_CONCURRENCY_LIMIT;
       const limit = enabled ? defaultLimit : toEmbed.length;
-      const batches = [];
-      for (let i = 0; i < toEmbed.length; i += limit) batches.push(toEmbed.slice(i, i + limit));
-      for (const batch of batches) {
+      let batchStart = 0;
+      for (let i = 0; i < toEmbed.length; i += limit) {
+        const batch = toEmbed.slice(i, i + limit);
         let attempt = 0; let delay = DEFAULT_INITIAL_RETRY_DELAY;
         while (true) {
           try {
             const out = await this.embedder.embedDocuments(batch);
-            newEmbeds.push(...out);
+            for (let j = 0; j < out.length; j++) {
+              newEmbeds[batchStart + j] = out[j];
+            }
             break;
           } catch (err) {
             attempt++;
@@ -183,6 +248,7 @@ class VectraClient {
             delay = Math.min(DEFAULT_MAX_RETRY_DELAY, delay * 2);
           }
         }
+        batchStart += limit;
       }
       newEmbeds.forEach((vec, j) => {
         const h = hashes[mapIndex[j]];
@@ -191,23 +257,28 @@ class VectraClient {
     }
   }
 
-  async _processDirectory(filePath) {
-    const files = await fs.promises.readdir(filePath);
-    const summary = { processed: 0, succeeded: 0, failed: 0, errors: [] };
-    for (const file of files) {
-      const full = path.join(filePath, file);
+  async _processDirectory(filePath, summary = { processed: 0, succeeded: 0, failed: 0, errors: [] }, isTopLevel = true) {
+    const entries = await fs.promises.readdir(filePath, { withFileTypes: true });
+    for (const entry of entries) {
+      const full = path.join(filePath, entry.name);
       if (this._isTemporaryFile(full)) continue;
-      summary.processed++;
-      try {
-        await this.ingestDocuments(full);
-        summary.succeeded++;
-      } catch (err) {
-        summary.failed++;
-        summary.errors.push({ file: full, message: err?.message || String(err) });
-        this.trigger('onError', err);
+      if (entry.isDirectory()) {
+        await this._processDirectory(full, summary, false);
+      } else {
+        summary.processed++;
+        try {
+          await this.ingestDocuments(full);
+          summary.succeeded++;
+        } catch (err) {
+          summary.failed++;
+          summary.errors.push({ file: full, message: err?.message || String(err) });
+          this.trigger('onError', err);
+        }
       }
     }
-    this.trigger('onIngestSummary', summary);
+    if (isTopLevel) {
+      this.trigger('onIngestSummary', summary);
+    }
   }
 
   async _validateFile(filePath, stats) {
@@ -296,130 +367,176 @@ class VectraClient {
     }
   }
 
-  async ingestDocuments(filePath) {
-    const traceId = uuidv4();
-    const rootSpanId = uuidv4();
-    const tStart = Date.now();
-    const provider = this.config.embedding.provider;
-    const modelName = this.config.embedding.modelName;
-    
-    try {
-      const stats = await fs.promises.stat(filePath);
-
-      telemetry.track('ingest_started', {
-        source_type: stats.isDirectory() ? 'directory' : 'file',
-        file_types: stats.isDirectory() ? [] : [path.extname(filePath).replace('.', '')],
-        chunking_strategy: this.config.chunking.strategy,
-        metadata_enrichment: this._metadataEnrichmentEnabled
-      });
-
+  async ingestBatch(filePaths, ingestionMode = 'append') {
+    const allFiles = [];
+    const collectFiles = async (p) => {
+      const stats = await fs.promises.stat(p);
       if (stats.isDirectory()) {
-        await this._processDirectory(filePath);
-        return;
+        const entries = await fs.promises.readdir(p, { withFileTypes: true });
+        for (const entry of entries) {
+          const full = path.join(p, entry.name);
+          if (!this._isTemporaryFile(full)) {
+            await collectFiles(full);
+          }
+        }
+      } else {
+        if (!this._isTemporaryFile(p)) {
+          allFiles.push(p);
+        }
       }
+    };
 
-      const t0 = Date.now();
-      this.trigger('onIngestStart', filePath);
-      
+    for (const p of filePaths) {
+      await collectFiles(p);
+    }
+
+    if (allFiles.length === 0) return;
+
+    const mode = ingestionMode || (this.config.ingestion && this.config.ingestion.mode) || 'append';
+    const tStart = Date.now();
+    this.trigger('onIngestStart', `batch of ${allFiles.length} files`);
+    
+    telemetry.track('ingest_batch_started', {
+      file_count: allFiles.length,
+      ingestion_mode: mode
+    });
+
+    const fileInfoList = [];
+    let allChunks = [];
+    let allHashes = [];
+
+    for (const filePath of allFiles) {
+      const stats = await fs.promises.stat(filePath);
       const validation = await this._validateFile(filePath, stats);
-      this.trigger('onPreIngestionValidation', validation);
       
-      const mode = (this.config.ingestion && this.config.ingestion.mode) ? this.config.ingestion.mode : 'skip';
       let exists = false;
-      if (this.vectorStore && typeof this.vectorStore.fileExists === 'function') {
+      if (mode === 'skip' && this.vectorStore && typeof this.vectorStore.fileExists === 'function') {
         try { exists = await this.vectorStore.fileExists(validation.fileSHA256, validation.fileSize, validation.lastModified); } catch { exists = false; }
       }
-      if (mode === 'skip' && exists) {
-        this.trigger('onIngestSkipped', validation);
-        return;
-      }
+      
+      if (exists) continue;
 
-      const rawText = await this.processor.loadDocument(filePath);
-
-      this.trigger('onChunkingStart', this.config.chunking.strategy);
+      let rawText = await this.processor.loadDocument(filePath);
+      const chunkRes = await this.runMiddlewares('onBeforeChunk', rawText, this.config);
+      rawText = Array.isArray(chunkRes) ? chunkRes[0] : chunkRes;
       const chunks = await this.processor.process(rawText);
-
-      this.trigger('onEmbeddingStart', chunks.length);
-      
       const hashes = chunks.map(c => crypto.createHash('sha256').update(c).digest('hex'));
-      const toEmbed = [];
-      const mapIndex = [];
-      hashes.forEach((h, i) => {
-        if (this._embeddingCache.has(h)) return;
-        toEmbed.push(chunks[i]);
-        mapIndex.push(i);
+      
+      fileInfoList.push({
+        path: filePath,
+        rawText,
+        chunks,
+        hashes,
+        validation,
+        chunkRange: [allChunks.length, allChunks.length + chunks.length]
       });
       
-      await this._batchEmbedChunks(toEmbed, mapIndex, hashes);
-      
-      const embeddings = hashes.map((h) => this._embeddingCache.get(h));
-
-      const documents = await this._prepareDocuments(filePath, rawText, chunks, embeddings, hashes, validation);
-      
-      let existsServer = false;
-      if (this.vectorStore && typeof this.vectorStore.fileExists === 'function') {
-        try { existsServer = await this.vectorStore.fileExists(validation.fileSHA256, validation.fileSize, validation.lastModified); } catch { existsServer = false; }
-      }
-      if (mode === 'skip' && existsServer) {
-        this.trigger('onIngestSkipped', validation);
-        return;
-      }
-      
-      await this._storeDocuments(documents, mode, validation.absolutePath);
-
-      const durationMs = Date.now() - t0;
-      this.trigger('onIngestEnd', filePath, chunks.length, durationMs);
-      
-      const chunkCountBucket = chunks.length < 50 ? '1-50' : chunks.length < 200 ? '50-200' : '200+';
-      const durationBucket = durationMs < 1000 ? '0-1s' : durationMs < 5000 ? '1-5s' : '5s+';
-      
-      telemetry.track('ingest_completed', {
-        chunk_count_bucket: chunkCountBucket,
-        duration_ms_bucket: durationBucket,
-        cached_embeddings: false 
-      });
-      
-      this.logger.logTrace({
-        traceId,
-        spanId: rootSpanId,
-        name: 'ingestDocuments',
-        startTime: tStart,
-        endTime: Date.now(),
-        input: { filePath },
-        output: { chunks: chunks.length, durationMs },
-        attributes: { fileSize: validation.fileSize },
-        provider,
-        modelName
-      });
-      this.logger.logMetric({ name: 'ingest_latency', value: durationMs, tags: { type: 'single_file' } });
-
-    } catch (e) {
-      telemetry.track('error_occurred', {
-        stage: 'ingestion',
-        error_type: e.name || 'unknown'
-      });
-      this.trigger('onError', e);
-      this.logger.logTrace({
-        traceId,
-        spanId: rootSpanId,
-        name: 'ingestDocuments',
-        startTime: tStart,
-        endTime: Date.now(),
-        input: { filePath },
-        error: { message: e.message },
-        status: 'error',
-        provider,
-        modelName
-      });
-      throw e;
+      allChunks.push(...chunks);
+      allHashes.push(...hashes);
     }
+
+    if (allChunks.length === 0) {
+      this.trigger('onIngestEnd', 'batch', 0, Date.now() - tStart);
+      return;
+    }
+
+    // Batch Embedding
+    const uniqueHashes = [...new Set(allHashes)];
+    const uncachedHashes = uniqueHashes.filter(h => !this._embeddingCache.has(h));
+    
+    if (uncachedHashes.length > 0) {
+      const hashToChunk = {};
+      allHashes.forEach((h, i) => {
+        if (uncachedHashes.includes(h)) hashToChunk[h] = allChunks[i];
+      });
+      
+      const uncachedTexts = uncachedHashes.map(h => hashToChunk[h]);
+      const enabled = !!(this.config.ingestion && this.config.ingestion.rateLimitEnabled);
+      const defaultLimit = (this.config.ingestion && typeof this.config.ingestion.concurrencyLimit === 'number') ? this.config.ingestion.concurrencyLimit : DEFAULT_CONCURRENCY_LIMIT;
+      const limit = enabled ? defaultLimit : uncachedTexts.length;
+      
+      for (let i = 0; i < uncachedTexts.length; i += limit) {
+        let batch = uncachedTexts.slice(i, i + limit);
+        const batchHashes = uncachedHashes.slice(i, i + limit);
+        let attempt = 0; let delay = DEFAULT_INITIAL_RETRY_DELAY;
+        while (true) {
+          try {
+            let out = await this.embedder.embedDocuments(batch);
+            [batch, out] = await this.runMiddlewares('onAfterEmbed', batch, out);
+            out.forEach((vec, j) => this._embeddingCache.set(batchHashes[j], vec));
+            break;
+          } catch (err) {
+            attempt++;
+            if (attempt >= DEFAULT_RETRY_ATTEMPTS) throw err;
+            await new Promise(r => setTimeout(r, delay));
+            delay = Math.min(DEFAULT_MAX_RETRY_DELAY, delay * 2);
+          }
+        }
+      }
+    }
+
+    // Prepare Documents
+    let documents = [];
+    for (const info of fileInfoList) {
+      const fileDocs = await this._prepareDocuments(
+        info.path, 
+        info.rawText, 
+        info.chunks, 
+        info.hashes.map(h => this._embeddingCache.get(h)), 
+        info.hashes, 
+        info.validation
+      );
+      documents.push(...fileDocs);
+    }
+
+    // Store
+    const absPaths = [...new Set(fileInfoList.map(info => info.validation.absolutePath))];
+    if (this.vectorStore && typeof this.vectorStore.ensureIndexes === 'function') {
+      try { await this.vectorStore.ensureIndexes(); } catch (_) {}
+    }
+    
+    if (mode === 'replace' && this.vectorStore && typeof this.vectorStore.deleteDocuments === 'function') {
+      for (const absPath of absPaths) {
+        try { await this.vectorStore.deleteDocuments({ filter: { absolutePath: absPath } }); } catch (_) {}
+      }
+    }
+
+    let attempt = 0; let delay = DEFAULT_INITIAL_RETRY_DELAY;
+    while (true) {
+      try {
+        if (mode === 'replace' && this.vectorStore && typeof this.vectorStore.upsertDocuments === 'function') {
+          await this.vectorStore.upsertDocuments(documents);
+        } else {
+          await this.vectorStore.addDocuments(documents);
+        }
+        break;
+      } catch (err) {
+        attempt++;
+        if (attempt >= DEFAULT_RETRY_ATTEMPTS) throw err;
+        await new Promise(r => setTimeout(r, delay));
+        delay = Math.min(DEFAULT_MAX_RETRY_DELAY, delay * 2);
+      }
+    }
+
+    const durationMs = Date.now() - tStart;
+    this.trigger('onIngestEnd', 'batch', allChunks.length, durationMs);
+    
+    telemetry.track('ingest_batch_completed', {
+      file_count: allFiles.length,
+      chunk_count: allChunks.length,
+      duration_ms: durationMs
+    });
   }
 
-  async listDocuments({ filter = null, limit = 100, offset = 0 } = {}) {
+  async ingestDocuments(filePath) {
+    return this.ingestBatch([filePath]);
+  }
+
+  async listDocuments({ filter = null, limit = 100, cursor = null } = {}) {
     if (!this.vectorStore || typeof this.vectorStore.listDocuments !== 'function') {
       throw new Error('Vector store does not support listDocuments');
     }
-    return this.vectorStore.listDocuments({ filter, limit, offset });
+    return this.vectorStore.listDocuments({ filter, limit, cursor });
   }
 
   async deleteDocuments({ ids = null, filter = null } = {}) {
@@ -464,14 +581,20 @@ class VectraClient {
   }
 
   tokenEstimate(text) {
-    const len = text ? text.length : 0;
-    return Math.ceil(len / 4);
+    if (!text) return 0;
+    let asciiChars = 0;
+    for (let i = 0; i < text.length; i++) {
+        if (text.charCodeAt(i) < 128) asciiChars++;
+    }
+    const nonAscii = text.length - asciiChars;
+    return Math.max(1, Math.floor((asciiChars + 3) / 4) + nonAscii);
   }
 
   buildContextParts(docs, query) {
     const budget = (this.config.queryPlanning && this.config.queryPlanning.tokenBudget) ? this.config.queryPlanning.tokenBudget : DEFAULT_TOKEN_BUDGET;
     const preferSumm = (this.config.queryPlanning && this.config.queryPlanning.preferSummariesBelow) ? this.config.queryPlanning.preferSummariesBelow : DEFAULT_PREFER_SUMMARY_BELOW;
     const parts = [];
+    const docMap = [];
     let used = 0;
     for (const d of docs) {
       const t = d.metadata?.docTitle || '';
@@ -483,27 +606,74 @@ class VectraClient {
       const est = this.tokenEstimate(part);
       if (used + est > budget) break;
       parts.push(part);
+      docMap.push({
+        source: d.metadata?.source || d.metadata?.absolutePath || '',
+        pageFrom: d.metadata?.pageFrom || null,
+        pageTo: d.metadata?.pageTo || null,
+        section: d.metadata?.section || null,
+        docTitle: d.metadata?.docTitle || null,
+        _content: chosen
+      });
       used += est;
     }
-    return parts;
+    return { parts, docMap };
   }
 
-  extractSnippets(docs, query, maxSnippets) {
-    const terms = query.toLowerCase().split(/\W+/).filter(t=>t.length>2);
-    const out = [];
+  _extractFirstSentence(text, maxLen = 250) {
+    if (!text) return '';
+    const m = text.match(/^(.*?[.!?])\s/s);
+    const sent = m ? m[1] : text;
+    return sent.length > maxLen ? sent.slice(0, maxLen) + '...' : sent;
+  }
+
+  parseCitations(answer, docMap) {
+    const citations = [];
+    const seen = new Set();
+    const regex = /\[(\d+)\]/g;
+    let match;
+    while ((match = regex.exec(answer)) !== null) {
+      const idx = parseInt(match[1], 10);
+      if (seen.has(idx) || idx < 1 || idx > docMap.length) continue;
+      seen.add(idx);
+      const doc = docMap[idx - 1];
+      citations.push({
+        index: idx,
+        source: doc.source || '',
+        page: doc.pageFrom || null,
+        section: doc.section || null,
+        quote: this._extractFirstSentence(doc._content || '', 250)
+      });
+    }
+    return citations;
+  }
+
+  async extractSnippets(docs, query, queryVector, maxSnippets) {
+    const allSentences = [];
     for (const d of docs) {
       const sents = d.content.split(/(?<=[.!?])\s+/);
       for (const s of sents) {
-        const l = s.toLowerCase();
-        const score = terms.reduce((acc,t)=> acc + (l.includes(t) ? 1 : 0), 0);
-        if (score > 0) {
-          const pages = (d.metadata?.pageFrom && d.metadata?.pageTo) ? `pages ${d.metadata.pageFrom}-${d.metadata.pageTo}` : '';
-          out.push(`${d.metadata?.docTitle || ''} ${d.metadata?.section || ''} ${pages}\n${s}`);
-          if (out.length >= maxSnippets) return out;
-        }
+        allSentences.push({ doc: d, text: s });
       }
     }
-    return out;
+    if (allSentences.length === 0) return [];
+    
+    // Batch embed sentences for semantic evaluation
+    const sentenceTexts = allSentences.map(s => s.text);
+    const sentenceEmbeddings = await this.embedder.embedDocuments(sentenceTexts);
+    
+    const scored = sentenceEmbeddings.map((emb, i) => {
+      // Compute cosine similarity with query vector
+      const score = emb.reduce((acc, v, j) => acc + (v * queryVector[j]), 0);
+      return { text: allSentences[i].text, doc: allSentences[i].doc, score };
+    });
+    
+    scored.sort((a, b) => b.score - a.score);
+    
+    return scored.slice(0, maxSnippets).map(s => {
+      const d = s.doc;
+      const pages = (d.metadata?.pageFrom && d.metadata?.pageTo) ? `pages ${d.metadata.pageFrom}-${d.metadata.pageTo}` : '';
+      return `${d.metadata?.docTitle || ''} ${d.metadata?.section || ''} ${pages}\n${s.text}`;
+    });
   }
 
   reciprocalRankFusion(docLists, k = 60) {
@@ -581,7 +751,7 @@ class VectraClient {
     const tStart = Date.now();
     
     if (sessionId) {
-        this.logger.updateSession(sessionId, null, { lastQuery: query });
+        this.logger?.updateSession(sessionId, null, { lastQuery: query });
     }
 
     const provider = this.config.llm.provider;
@@ -598,12 +768,15 @@ class VectraClient {
         const k = (this.config.reranking && this.config.reranking.enabled) 
             ? this.config.reranking.windowSize : 5;
         
-        const queryVector = await this.embedder.embedQuery(query);
+        let queryVector = await this.embedder.embedQuery(query);
+        [query, queryVector] = await this.runMiddlewares('onBeforeRetrieve', query, queryVector);
 
         if (strategy === RetrievalStrategy.HYDE) {
             const hypotheticalDoc = await this.generateHydeQuery(query);
             const hydeVector = await this.embedder.embedQuery(hypotheticalDoc);
-            docs = await this.vectorStore.similaritySearch(hydeVector, k, filter);
+            // Weighted average: 70% HyDE, 30% original query
+            const combinedVector = hydeVector.map((h, i) => 0.7 * h + 0.3 * queryVector[i]);
+            docs = await this.vectorStore.similaritySearch(combinedVector, k, filter);
         } else if (strategy === RetrievalStrategy.MULTI_QUERY) {
             const queries = await this.generateMultiQueries(query);
             if (this.config.queryPlanning) {
@@ -645,7 +818,7 @@ class VectraClient {
            result_count: docs.length
         });
         
-        this.logger.logTrace({
+        this.logger?.logTrace({
             traceId,
             spanId: uuidv4(),
             parentSpanId: rootSpanId,
@@ -663,12 +836,18 @@ class VectraClient {
           const kws = Array.isArray(d.metadata?.keywords) ? d.metadata.keywords.map(k=>String(k).toLowerCase()) : [];
           const match = terms.reduce((acc,t)=>acc + (kws.includes(t)?1:0), 0);
           return { ...d, _boost: match };
-        }).sort((a,b)=> (b._boost||0) - (a._boost||0));
+        }).sort((a,b)=> ((b.score||0) + 0.1 * (b._boost||0)) - ((a.score||0) + 0.1 * (a._boost||0)));
 
-        const contextParts = this.buildContextParts(docs, query);
+        const citationsEnabled = !!(this.config.generation && this.config.generation.structuredOutput === 'citations')
+          && !(this.config.grounding && this.config.grounding.enabled && this.config.grounding.strict);
+
+        const { parts: contextParts, docMap } = this.buildContextParts(docs, query);
+        if (citationsEnabled) {
+          contextParts.forEach((p, i) => { contextParts[i] = `[${i + 1}] ${p}`; });
+        }
         if (this.config.grounding && this.config.grounding.enabled) {
           const maxSnippets = this.config.grounding.maxSnippets || 3;
-          const snippets = this.extractSnippets(docs, query, maxSnippets);
+          const snippets = await this.extractSnippets(docs, query, queryVector, maxSnippets);
           if (this.config.grounding.strict) {
             contextParts.splice(0, contextParts.length, ...snippets);
           } else {
@@ -690,18 +869,24 @@ class VectraClient {
           prompt = this.config.prompts.query.replace(/\{\{context\}\}/g, context).replace(/\{\{question\}\}/g, query);
           if (historyText) prompt = `Conversation:\n${historyText}\n\n${prompt}`;
         } else {
-          prompt = `Answer the question using the provided summaries and cite titles/sections/pages where relevant.\nContext:\n${context}\n\n${historyText ? `Conversation:\n${historyText}\n\n` : ''}Question: ${query}`;
+          if (citationsEnabled) {
+            prompt = `Answer the question using the provided context. Cite sources using inline markers like [1], [2], etc., matching the numbered context chunks. Every factual claim must have a citation.\nContext:\n${context}\n\n${historyText ? `Conversation:\n${historyText}\n\n` : ''}Question: ${query}`;
+          } else {
+            prompt = `Answer the question using the provided summaries and cite titles/sections/pages where relevant.\nContext:\n${context}\n\n${historyText ? `Conversation:\n${historyText}\n\n` : ''}Question: ${query}`;
+          }
         }
         
         const tGen = Date.now();
         this.trigger('onGenerationStart', prompt);
-        const systemInst = "You are a helpful RAG assistant.";
+        const systemInst = citationsEnabled
+          ? "You are a helpful RAG assistant. When answering, cite sources using inline markers like [1], [2], etc., matching the numbered context chunks provided. Every factual claim must have a citation."
+          : "You are a helpful RAG assistant.";
         
         if (stream) {
             // Streaming return
             if (!this.llm.generateStream) throw new Error("Streaming not implemented for this provider");
             
-            this.logger.logTrace({
+            this.logger?.logTrace({
                 traceId,
                 spanId: uuidv4(),
                 parentSpanId: rootSpanId,
@@ -727,7 +912,7 @@ class VectraClient {
                     }
                 } catch (e) {
                     self.trigger('onError', e);
-                     self.logger.logTrace({
+                     self.logger?.logTrace({
                         traceId,
                         spanId: rootSpanId,
                         name: 'queryRAG',
@@ -749,7 +934,7 @@ class VectraClient {
                 const promptChars = prompt.length;
                 const answerChars = fullAnswer.length;
 
-                self.logger.logTrace({
+                self.logger?.logTrace({
                     traceId,
                     spanId: uuidv4(),
                     parentSpanId: rootSpanId,
@@ -763,10 +948,10 @@ class VectraClient {
                     modelName
                 });
 
-                self.logger.logMetric({ name: 'prompt_chars', value: promptChars });
-                self.logger.logMetric({ name: 'completion_chars', value: answerChars });
+                self.logger?.logMetric({ name: 'prompt_chars', value: promptChars });
+                self.logger?.logMetric({ name: 'completion_chars', value: answerChars });
 
-                self.logger.logTrace({
+                self.logger?.logTrace({
                     traceId,
                     spanId: rootSpanId,
                     name: 'queryRAG',
@@ -779,14 +964,20 @@ class VectraClient {
                     modelName
                 });
                 
-                self.logger.logMetric({ name: 'query_latency', value: Date.now() - tStart, tags: { type: 'total' } });
-                self.logger.logMetric({ name: 'retrieval_latency', value: retrievalMs, tags: { type: 'retrieval' } });
-                self.logger.logMetric({ name: 'generation_latency', value: genMs, tags: { type: 'generation' } });
+                self.logger?.logMetric({ name: 'query_latency', value: Date.now() - tStart, tags: { type: 'total' } });
+                self.logger?.logMetric({ name: 'retrieval_latency', value: retrievalMs, tags: { type: 'retrieval' } });
+                self.logger?.logMetric({ name: 'generation_latency', value: genMs, tags: { type: 'generation' } });
+
+                if (citationsEnabled) {
+                  yield { type: 'citations', citations: self.parseCitations(fullAnswer, docMap) };
+                }
             }
 
             return wrappedStream();
         } else {
-            const answer = await this.llm.generate(prompt, systemInst);
+            let answer = await this.llm.generate(prompt, systemInst);
+            let sources = docs.map(d => d.metadata);
+            [answer, sources] = await this.runMiddlewares('onAfterGenerate', answer, sources);
             if (this.history && sessionId) {
               const add = this.history.addMessage?.bind(this.history);
               if (typeof add === 'function') {
@@ -802,7 +993,7 @@ class VectraClient {
             const promptChars = prompt.length;
             const answerChars = answer ? String(answer).length : 0;
 
-            this.logger.logTrace({
+            this.logger?.logTrace({
                 traceId,
                 spanId: uuidv4(),
                 parentSpanId: rootSpanId,
@@ -816,10 +1007,10 @@ class VectraClient {
                 modelName
             });
 
-            this.logger.logMetric({ name: 'prompt_chars', value: promptChars });
-            this.logger.logMetric({ name: 'completion_chars', value: answerChars });
+            this.logger?.logMetric({ name: 'prompt_chars', value: promptChars });
+            this.logger?.logMetric({ name: 'completion_chars', value: answerChars });
 
-            this.logger.logTrace({
+            this.logger?.logTrace({
                 traceId,
                 spanId: rootSpanId,
                 name: 'queryRAG',
@@ -832,12 +1023,25 @@ class VectraClient {
                 modelName
             });
             
-            this.logger.logMetric({ name: 'query_latency', value: Date.now() - tStart, tags: { type: 'total' } });
-            this.logger.logMetric({ name: 'retrieval_latency', value: retrievalMs, tags: { type: 'retrieval' } });
-            this.logger.logMetric({ name: 'generation_latency', value: genMs, tags: { type: 'generation' } });
+            this.logger?.logMetric({ name: 'query_latency', value: Date.now() - tStart, tags: { type: 'total' } });
+            this.logger?.logMetric({ name: 'retrieval_latency', value: retrievalMs, tags: { type: 'retrieval' } });
+            this.logger?.logMetric({ name: 'generation_latency', value: genMs, tags: { type: 'generation' } });
 
             if (this.config.generation && this.config.generation.outputFormat === 'json') {
-              try { const parsed = JSON.parse(String(answer)); return { answer: parsed, sources: docs.map(d => d.metadata) }; } catch { return { answer, sources: docs.map(d => d.metadata) }; }
+              try {
+                const parsed = JSON.parse(String(answer));
+                const result = { answer: parsed, sources: docs.map(d => d.metadata) };
+                if (citationsEnabled) result.citations = this.parseCitations(String(answer), docMap);
+                return result;
+              } catch {
+                const result = { answer, sources: docs.map(d => d.metadata) };
+                if (citationsEnabled) result.citations = this.parseCitations(String(answer), docMap);
+                return result;
+              }
+            }
+            if (citationsEnabled) {
+              const citations = this.parseCitations(String(answer), docMap);
+              return { answer, citations, sources: docs.map(d => d.metadata) };
             }
             return { answer, sources: docs.map(d => d.metadata) };
         }
@@ -847,7 +1051,7 @@ class VectraClient {
         error_type: e.name || 'unknown'
       });
       this.trigger('onError', e);
-      this.logger.logTrace({
+      this.logger?.logTrace({
         traceId,
         spanId: rootSpanId,
         name: 'queryRAG',
@@ -871,17 +1075,69 @@ class VectraClient {
 
     const report = [];
     for (const item of testSet) {
-      const res = await this.queryRAG(item.question);
-      const context = Array.isArray(res.sources) ? res.sources.map(s => s.summary || '').join('\n') : '';
-      const faithPrompt = `Rate 0-1: Is the following Answer derived only from the Context?\nContext:\n${context}\n\nAnswer:\n${typeof res.answer === 'string' ? res.answer : JSON.stringify(res.answer)}`;
-      const relevancePrompt = `Rate 0-1: Does the Answer correctly answer the Question?\nQuestion:\n${item.question}\n\nAnswer:\n${typeof res.answer === 'string' ? res.answer : JSON.stringify(res.answer)}`;
-      let faith = 0; let rel = 0;
-      try { faith = Math.max(0, Math.min(1, parseFloat(String(await this.llm.generate(faithPrompt, 'You return a single number between 0 and 1.'))))); } catch {}
-      try { rel = Math.max(0, Math.min(1, parseFloat(String(await this.llm.generate(relevancePrompt, 'You return a single number between 0 and 1.'))))); } catch {}
-      report.push({ question: item.question, expectedGroundTruth: item.expectedGroundTruth, faithfulness: faith, relevance: rel });
+      const query = item.question;
+      const groundTruth = item.expectedGroundTruth || '';
+      const res = await this.queryRAG(query);
+      const answer = typeof res.answer === 'string' ? res.answer : JSON.stringify(res.answer);
+      const sources = Array.isArray(res.sources) ? res.sources : [];
+      const context = sources.map((s, i) => `[Source ${i+1}] ${s.content || s.summary || ''}`).join('\n');
+
+      // 1. Faithfulness
+      const faithPrompt = `Given the context and the answer, determine if every claim in the answer is supported by the context.
+Context: ${context}
+Answer: ${answer}
+Return JSON: {"claims": [{"claim": "...", "supported": true, "evidence": "..."}], "score": 0.0-1.0}`;
+
+      // 2. Context Precision
+      const precisionResults = [];
+      for (const src of sources) {
+        const chunk = src.content || src.summary || '';
+        const precPrompt = `Query: ${query}\nChunk: ${chunk}\nIs this chunk relevant to the query? Return JSON: {"relevant": true}`;
+        try {
+          const pRes = await this.llm.generate(precPrompt, "Return valid JSON.");
+          const pJson = JSON.parse(pRes.match(/\{.*\}/s)[0]);
+          precisionResults.push(pJson.relevant ? 1.0 : 0.0);
+        } catch { precisionResults.push(0.0); }
+      }
+      const contextPrecision = precisionResults.length > 0 ? precisionResults.reduce((a, b) => a + b, 0) / precisionResults.length : 0;
+
+      // 3. Context Recall
+      const recallPrompt = `Ground Truth: ${groundTruth}\nContext: ${context}\nDoes the context contain the facts needed for the ground truth? Return JSON: {"facts": [{"fact": "...", "present": true}], "score": 0.0-1.0}`;
+
+      // 4. Answer Correctness
+      const correctnessPrompt = `Question: ${query}\nGenerated Answer: ${answer}\nGround Truth: ${groundTruth}\nRate correctness (0-1). Return JSON: {"score": 0.0-1.0, "reason": "..."}`;
+
+      const metrics = { faithfulness: 0, contextRecall: 0, answerCorrectness: 0 };
+      const metricConfigs = [
+        { key: 'faithfulness', prompt: faithPrompt },
+        { key: 'contextRecall', prompt: recallPrompt },
+        { key: 'answerCorrectness', prompt: correctnessPrompt }
+      ];
+
+      for (const m of metricConfigs) {
+        try {
+          const mRes = await this.llm.generate(m.prompt, "Return valid JSON.");
+          const mJson = JSON.parse(mRes.match(/\{.*\}/s)[0]);
+          metrics[m.key] = mJson.score || 0;
+        } catch {}
+      }
+
+      report.push({
+        question: query,
+        expectedGroundTruth: groundTruth,
+        answer: answer,
+        metrics: {
+          faithfulness: metrics.faithfulness,
+          relevance: metrics.answerCorrectness,
+          contextPrecision,
+          contextRecall: metrics.contextRecall,
+          answerCorrectness: metrics.answerCorrectness
+        }
+      });
     }
     return report;
   }
 }
 
 module.exports = { VectraClient };
+

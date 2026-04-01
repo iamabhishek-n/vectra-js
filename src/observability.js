@@ -25,11 +25,19 @@ class SQLiteLogger {
 
         const sqlite3 = require('sqlite3').verbose();
         this.db = new sqlite3.Database(dbPath, (err) => {
-            if (err) {
-                throw err;
-            }
+            if (err) throw err;
+            this.db.run('PRAGMA journal_mode = WAL');
+            this.db.run('PRAGMA synchronous = NORMAL');
         });
         this.initializeSchema();
+        this.traceBuffer = [];
+        this.metricBuffer = [];
+        this.logBuffer = [];
+        this.bufferLimit = 50;
+        
+        if (this.enabled) {
+          this.flushInterval = setInterval(() => this.flush(), 5000);
+        }
     } catch (error) {
         throw error;
     }
@@ -100,86 +108,76 @@ class SQLiteLogger {
 
   logTrace(trace) {
     if (!this.enabled || !this.trackTraces) return;
-    try {
-      const stmt = this.db.prepare(`
-        INSERT INTO traces (id, project_id, trace_id, span_id, parent_span_id, name, start_time, end_time, duration, status, attributes, input, output, error, provider, model_name)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      stmt.run(
-        uuidv4(),
-        this.projectId,
-        trace.traceId,
-        trace.spanId,
-        trace.parentSpanId || null,
-        trace.name,
-        trace.startTime,
-        trace.endTime,
-        trace.duration,
-        trace.status,
-        JSON.stringify(trace.attributes || {}),
-        JSON.stringify(trace.input || {}),
-        JSON.stringify(trace.output || {}),
-        JSON.stringify(trace.error || {}),
-        trace.provider || null,
-        trace.modelName || null
-      );
-      stmt.finalize();
-    } catch (error) {
-      console.error('Failed to log trace:', error);
-    }
+    this.traceBuffer.push({ ...trace, id: uuidv4(), timestamp: Date.now() });
+    if (this.traceBuffer.length >= this.bufferLimit) this.flush();
+  }
+
+  flush() {
+    if (!this.enabled) return;
+    this.db.serialize(() => {
+        this.db.run("BEGIN TRANSACTION");
+        
+        if (this.traceBuffer.length > 0) {
+            const stmt = this.db.prepare(`
+                INSERT INTO traces (id, project_id, trace_id, span_id, parent_span_id, name, start_time, end_time, duration, status, attributes, input, output, error, provider, model_name)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+            for (const t of this.traceBuffer) {
+                stmt.run(
+                    t.id, this.projectId, t.traceId, t.spanId, t.parentSpanId || null, t.name,
+                    t.startTime, t.endTime, t.duration, t.status,
+                    JSON.stringify(t.attributes || {}), JSON.stringify(t.input || {}),
+                    JSON.stringify(t.output || {}), JSON.stringify(t.error || {}),
+                    t.provider || null, t.modelName || null
+                );
+            }
+            stmt.finalize();
+            this.traceBuffer = [];
+        }
+
+        if (this.metricBuffer.length > 0) {
+            const stmt = this.db.prepare(`
+                INSERT INTO metrics (id, project_id, name, value, timestamp, tags)
+                VALUES (?, ?, ?, ?, ?, ?)
+            `);
+            for (const m of this.metricBuffer) {
+                stmt.run(uuidv4(), this.projectId, m.name, m.value, m.timestamp, JSON.stringify(m.tags || {}));
+            }
+            stmt.finalize();
+            this.metricBuffer = [];
+        }
+
+        if (this.logBuffer.length > 0) {
+            const stmt = this.db.prepare(`
+                INSERT INTO logs (id, project_id, level, message, timestamp, context)
+                VALUES (?, ?, ?, ?, ?, ?)
+            `);
+            for (const l of this.logBuffer) {
+                stmt.run(uuidv4(), this.projectId, l.level, l.message, l.timestamp, JSON.stringify(l.context || {}));
+            }
+            stmt.finalize();
+            this.logBuffer = [];
+        }
+
+        this.db.run("COMMIT", (err) => {
+            if (err) console.error('Failed to commit SQLite txn:', err);
+        });
+    });
   }
 
   logMetric(nameOrObj, value, tags = {}) {
     if (!this.enabled || !this.trackMetrics) return;
-    
-    let metricName = nameOrObj;
-    let metricValue = value;
-    let metricTags = tags;
-
-    if (typeof nameOrObj === 'object' && nameOrObj !== null) {
-        metricName = nameOrObj.name;
-        metricValue = nameOrObj.value;
-        metricTags = nameOrObj.tags || {};
-    }
-
-    try {
-      const stmt = this.db.prepare(`
-        INSERT INTO metrics (id, project_id, name, value, timestamp, tags)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `);
-      stmt.run(
-        uuidv4(),
-        this.projectId,
-        metricName,
-        metricValue,
-        Date.now(),
-        JSON.stringify(metricTags)
-      );
-      stmt.finalize();
-    } catch (error) {
-      console.error('Failed to log metric:', error);
-    }
+    let name = (typeof nameOrObj === 'object') ? nameOrObj.name : nameOrObj;
+    let val = (typeof nameOrObj === 'object') ? nameOrObj.value : value;
+    let tgs = (typeof nameOrObj === 'object') ? (nameOrObj.tags || {}) : tags;
+    this.metricBuffer.push({ name, value: val, tags: tgs, timestamp: Date.now() });
+    if (this.metricBuffer.length >= this.bufferLimit) this.flush();
   }
 
   log(level, message, context = {}) {
     if (!this.enabled || !this.trackLogs) return;
-    try {
-      const stmt = this.db.prepare(`
-        INSERT INTO logs (id, project_id, level, message, timestamp, context)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `);
-      stmt.run(
-        uuidv4(),
-        this.projectId,
-        level,
-        message,
-        Date.now(),
-        JSON.stringify(context)
-      );
-      stmt.finalize();
-    } catch (error) {
-      console.error('Failed to log message:', error);
-    }
+    this.logBuffer.push({ level, message, context, timestamp: Date.now() });
+    if (this.logBuffer.length >= this.bufferLimit) this.flush();
   }
 
   logSession(sessionId, userId, metadata = {}) {

@@ -176,19 +176,25 @@ class PrismaVectorStore extends VectorStore {
     }
   }
 
-  async listDocuments({ filter = null, limit = 100, offset = 0 } = {}) {
+  async listDocuments({ filter = null, limit = 100, cursor = null } = {}) {
     const { clientInstance } = this.config;
     const params = [];
-    let where = '';
+    const whereParts = [];
     if (filter) {
-      where = `WHERE ${this._cMeta} @> $1::jsonb`;
+      whereParts.push(`${this._cMeta} @> $${params.length + 1}::jsonb`);
       params.push(JSON.stringify(filter));
     }
-    const lim = Math.max(1, Math.min(1000, Number(limit) || 100));
-    const off = Math.max(0, Number(offset) || 0);
-    const q = `SELECT "id" as id, ${this._cContent} as content, ${this._cMeta} as metadata, "createdAt" as createdAt FROM ${this._table} ${where} ORDER BY "createdAt" DESC LIMIT ${lim} OFFSET ${off}`;
+    if (cursor) {
+      whereParts.push(`"id" > $${params.length + 1}`);
+      params.push(cursor);
+    }
+    const where = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
+    const lim = Math.max(1, Number(limit) || 100);
+    const q = `SELECT "id" as id, ${this._cContent} as content, ${this._cMeta} as metadata FROM ${this._table} ${where} ORDER BY "id" ASC LIMIT ${lim}`;
     const res = await clientInstance.$queryRawUnsafe(q, ...params);
-    return res.map(r => ({ id: r.id, content: r.content, metadata: r.metadata, createdAt: r.createdAt }));
+    const docs = res.map(r => ({ id: r.id, content: r.content, metadata: r.metadata }));
+    const nextCursor = docs.length === lim ? docs[docs.length - 1].id : null;
+    return { documents: docs, nextCursor };
   }
 
   async deleteDocuments({ ids = null, filter = null } = {}) {

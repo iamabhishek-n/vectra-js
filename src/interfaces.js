@@ -8,7 +8,7 @@ class VectorStore {
         // Default fallback
         return this.similaritySearch(vector, limit, filter);
     }
-    async listDocuments({ filter = null, limit = 100, offset = 0 } = {}) {
+    async listDocuments({ filter = null, limit = 100, cursor = null } = {}) {
         throw new Error("Method 'listDocuments' must be implemented.");
     }
     async deleteDocuments({ ids = null, filter = null } = {}) {
@@ -18,4 +18,10 @@ class VectorStore {
         return false;
     }
 }
-module.exports = { VectorStore };
+class VectraMiddleware {
+    async onBeforeChunk(text, config) { return text; }
+    async onAfterEmbed(chunks, embeddings) { return [chunks, embeddings]; }
+    async onBeforeRetrieve(query, vector) { return [query, vector]; }
+    async onAfterGenerate(answer, sources) { return [answer, sources]; }
+}
+module.exports = { VectorStore, VectraMiddleware };

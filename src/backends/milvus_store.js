@@ -30,19 +30,21 @@ class MilvusVectorStore extends VectorStore {
   }
   async hybridSearch(text, vector, limit = 5, filter = null) { return this.similaritySearch(vector, limit, filter); }
 
-  async listDocuments({ filter = null, limit = 100, offset = 0 } = {}) {
+  async listDocuments({ filter = null, limit = 100, cursor = null } = {}) {
     if (typeof this.client.query !== 'function') throw new Error('listDocuments is not supported for this Milvus client');
-    const lim = Math.max(1, Math.min(1000, Number(limit) || 100));
-    const off = Math.max(0, Number(offset) || 0);
+    const lim = Math.max(1, Number(limit) || 100);
+    const off = cursor ? Number(cursor) : 0;
     const res = await this.client.query({
       collection_name: this.collection,
       expr: filter || '',
-      output_fields: ['content', 'metadata'],
+      output_fields: ['id', 'content', 'metadata'],
       limit: lim,
       offset: off,
     });
     const rows = Array.isArray(res) ? res : (res?.data || res?.results || []);
-    return rows.map((r) => ({ id: r.id, content: r.content || '', metadata: r.metadata ? JSON.parse(r.metadata) : {} }));
+    const docs = rows.map((r) => ({ id: r.id, content: r.content || '', metadata: r.metadata ? JSON.parse(r.metadata) : {} }));
+    const nextCursor = docs.length === lim ? String(off + docs.length) : null;
+    return { documents: docs, nextCursor };
   }
 
   async fileExists(sha256, size, lastModified) {

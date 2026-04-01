@@ -10,6 +10,10 @@ class ChromaVectorStore extends VectorStore {
     }
 
     async _init() {
+        if (!this.client) {
+            const { ChromaClient } = require('chromadb');
+            this.client = new ChromaClient();
+        }
         if (!this.collection) {
             this.collection = await this.client.getOrCreateCollection({ name: this.collectionName });
         }
@@ -33,12 +37,19 @@ class ChromaVectorStore extends VectorStore {
         const metadatas = docs.map(d => this._cleanMetadata(d.metadata));
         const documents = docs.map(d => d.content);
 
-        await this.collection.add({
-            ids,
-            embeddings,
-            metadatas,
-            documents
-        });
+        console.log(`Adding ${docs.length} docs to Chroma collection: ${this.collectionName}`);
+        try {
+            await this.collection.add({
+                ids,
+                embeddings,
+                metadatas,
+                documents
+            });
+            console.log("Success adding docs to Chroma.");
+        } catch (e) {
+            console.error("Error in collection.add:", e);
+            throw e;
+        }
     }
 
     async upsertDocuments(docs) {
@@ -89,10 +100,10 @@ class ChromaVectorStore extends VectorStore {
         return out;
     }
 
-    async listDocuments({ filter = null, limit = 100, offset = 0 } = {}) {
+    async listDocuments({ filter = null, limit = 100, cursor = null } = {}) {
         await this._init();
         const lim = Math.max(1, Math.min(1000, Number(limit) || 100));
-        const off = Math.max(0, Number(offset) || 0);
+        const off = cursor ? Number(cursor) : 0;
         const res = await this.collection.get({
             where: filter || undefined,
             limit: lim,
@@ -102,7 +113,9 @@ class ChromaVectorStore extends VectorStore {
         const ids = Array.isArray(res?.ids) ? res.ids : [];
         const documents = Array.isArray(res?.documents) ? res.documents : [];
         const metadatas = Array.isArray(res?.metadatas) ? res.metadatas : [];
-        return ids.map((id, i) => ({ id, content: documents[i], metadata: metadatas[i] }));
+        const docs = ids.map((id, i) => ({ id, content: documents[i], metadata: metadatas[i] }));
+        const nextCursor = docs.length === lim ? String(off + docs.length) : null;
+        return { documents: docs, nextCursor };
     }
 
     async deleteDocuments({ ids = null, filter = null } = {}) {
