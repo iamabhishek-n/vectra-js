@@ -46,8 +46,9 @@ function checkGuardrails(query, guardrailsConfig) {
 
   if (cfg.contentFilter) {
     const lower = text.toLowerCase();
-    for (const term of DEFAULT_BLOCKED_TERMS) {
-      if (lower.includes(term)) {
+    const terms = [...DEFAULT_BLOCKED_TERMS, ...(cfg.blockedTerms || [])];
+    for (const term of terms) {
+      if (lower.includes(term.toLowerCase())) {
         throw new Error('GuardrailViolation: query blocked by content filter');
       }
     }

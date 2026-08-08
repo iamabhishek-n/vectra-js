@@ -83,7 +83,8 @@ const GuardrailConfigSchema = z.object({
   blockOffTopic: z.boolean().default(false),
   maxQueryLength: z.number().default(2000),
   contentFilter: z.boolean().default(false),
-  hallucinationCheck: z.boolean().default(false)
+  hallucinationCheck: z.boolean().default(false),
+  blockedTerms: z.array(z.string()).default([])
 });
 
 const DatabaseConfigSchema = z.object({

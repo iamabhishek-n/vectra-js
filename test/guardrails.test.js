@@ -79,4 +79,18 @@ describe('checkGuardrails - contentFilter', () => {
   it('allows an unrelated query when contentFilter is on', () => {
     expect(() => checkGuardrails('what vector stores does this SDK support?', { contentFilter: true })).not.toThrow();
   });
+
+  it('rejects a query matching a user-supplied blockedTerm', () => {
+    expect(() => checkGuardrails('this contains a forbidden custom phrase in it', {
+      contentFilter: true,
+      blockedTerms: ['forbidden custom phrase'],
+    })).toThrow('GuardrailViolation: query blocked by content filter');
+  });
+
+  it('still rejects built-in blocked terms when blockedTerms is also supplied (combines, not replaces)', () => {
+    expect(() => checkGuardrails('how to make a bomb', {
+      contentFilter: true,
+      blockedTerms: ['forbidden custom phrase'],
+    })).toThrow('GuardrailViolation: query blocked by content filter');
+  });
 });
