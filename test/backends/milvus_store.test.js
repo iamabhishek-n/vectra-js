@@ -1,4 +1,5 @@
 const { MilvusVectorStore } = require('../../src/backends/milvus_store');
+const { VectraClient, ProviderType } = require('../../src/core');
 
 describe('MilvusVectorStore', () => {
   it('addDocuments inserts vector, content, and JSON-stringified metadata', async () => {
@@ -162,6 +163,36 @@ describe('MilvusVectorStore', () => {
       const near = results.find(r => r.content === 'near');
       const far = results.find(r => r.content === 'far');
       expect(near.score).toBeGreaterThan(far.score);
+    });
+  });
+
+  describe('metricType config wiring through the public config path (round-3 Issue A)', () => {
+    // Regression guard: `database.metricType` must survive Zod validation in
+    // DatabaseConfigSchema and actually reach MilvusVectorStore's constructor.
+    // Previously the schema didn't declare `metricType` (a bare z.object, not
+    // .passthrough()), so Zod silently stripped it during parsing — a user
+    // setting metricType: 'L2' in their config never got L2 behavior. This test
+    // goes through VectraClient's real config parsing (RAGConfigSchema.parse +
+    // createVectorStore), not a direct `new MilvusVectorStore(...)` call, so it
+    // fails if the schema regresses to dropping the field.
+    it('propagates metricType: "L2" from VectraClient config into L2 score normalization', async () => {
+      const search = jest.fn().mockResolvedValue({
+        results: [{ content: 'hello world', metadata: '{}', score: 4 }],
+      });
+      const client = new VectraClient({
+        embedding: { provider: ProviderType.OPENAI, apiKey: 'test-key' },
+        llm: { provider: ProviderType.OPENAI, apiKey: 'test-key', modelName: 'gpt-4o-mini' },
+        database: { type: 'milvus', tableName: 'rag_collection', clientInstance: { search }, metricType: 'L2' },
+      });
+
+      expect(client.vectorStore).toBeInstanceOf(MilvusVectorStore);
+      expect(client.vectorStore.metricType).toBe('L2');
+
+      const results = await client.vectorStore.similaritySearch([0.1, 0.2], 5);
+
+      // 1 / (1 + 4) = 0.2. If metricType were stripped by the schema, this
+      // would default to 'COSINE' passthrough and score would stay 4.
+      expect(results[0].score).toBeCloseTo(0.2);
     });
   });
 });

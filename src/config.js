@@ -96,6 +96,11 @@ const DatabaseConfigSchema = z.object({
     metadata: z.string(),
   }).default({ content: 'content', vector: 'vector', metadata: 'metadata' }),
   clientInstance: z.any(), // The actual client object
+  // Milvus-specific: the metric the collection was created with (e.g. 'COSINE',
+  // 'IP', 'L2'). Optional/store-specific, so kept as a free-form string rather
+  // than a shared enum — no other backend in this codebase has its own metric
+  // config option to unify with. See MilvusVectorStore._normalizeScore.
+  metricType: z.string().optional(),
 });
 
 const RAGConfigSchema = z.object({

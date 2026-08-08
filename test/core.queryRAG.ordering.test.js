@@ -59,23 +59,26 @@ describe('VectraClient.queryRAG - post-retrieval ordering (final-review Critical
       retrieval: { strategy: RetrievalStrategy.MULTI_QUERY, llmConfig: { provider: ProviderType.OPENAI, apiKey: 'test-key', modelName: 'gpt-4o-mini' } },
     }));
 
-    // Each generated sub-query's similaritySearch returns docs with raw scores
-    // that intentionally contradict the RRF-fused rank order below, so a leftover
-    // raw-score re-sort would invert reciprocalRankFusion's output.
+    // docP is ranked FIRST by every sub-query's similaritySearch call, so RRF
+    // fusion puts it first — but it deliberately carries the LOWER raw `.score`
+    // (0.1 vs docQ's 0.9). This is the discriminating fixture: a raw-score
+    // re-sort would flip the order to [Q, P] (Q's score is higher), while the
+    // fix (which skips the re-sort for MULTI_QUERY) must keep RRF's [P, Q].
+    // With the old fixture (docQ always ranked first AND holding the higher raw
+    // score), fusion order and raw-score order coincided, so the test passed
+    // even with the buggy gate reverted — this fixture makes them diverge.
     const docP = { content: 'doc P', metadata: { id: 'P' }, score: 0.1 };
     const docQ = { content: 'doc Q', metadata: { id: 'Q' }, score: 0.9 };
     client.embedder.embedQuery = jest.fn().mockResolvedValue([0.1, 0.2]);
     client.retrievalLlm.generate = jest.fn().mockResolvedValue('rephrased query one');
-    // Every sub-query (including the original) hits similaritySearch; return docQ
-    // ranked first every time so RRF fuses to [Q, P] despite Q's higher raw score
-    // sitting on doc Q rather than doc P — the assertion below checks fusion order
-    // survives, not that it's "wrong": the point is the boost re-sort must not run.
-    client.vectorStore.similaritySearch = jest.fn().mockResolvedValue([docQ, docP]);
+    // Every sub-query (including the original) hits similaritySearch; return docP
+    // ranked first every time so RRF fuses to [P, Q] despite P's lower raw score.
+    client.vectorStore.similaritySearch = jest.fn().mockResolvedValue([docP, docQ]);
     client.llm.generate = jest.fn().mockResolvedValue('an answer');
 
     const result = await client.queryRAG('what is this?');
 
-    expect(result.sources).toEqual([{ id: 'Q' }, { id: 'P' }]);
+    expect(result.sources).toEqual([{ id: 'P' }, { id: 'Q' }]);
   });
 
   it('preserves MMR\'s greedy diversity order instead of re-sorting by raw vector score', async () => {
@@ -84,22 +87,30 @@ describe('VectraClient.queryRAG - post-retrieval ordering (final-review Critical
     }));
 
     // fetchK (20, clamped to >= k) is greater than k (5), so mmrSelect actually
-    // runs. Candidates are returned in ascending raw-score order (0.1, 0.5, 0.9);
-    // a leftover raw-score re-sort would produce [R3, R2, R1]. mmrSelect's own
-    // diversity selection is exercised for real here (no mocked mmrSelect), and
-    // with no embeddings available it falls back to lexical Jaccard diversity,
-    // which for these maximally-dissimilar docs preserves relevance order.
-    const docR1 = { content: 'apple banana cherry', metadata: { id: 'R1' }, score: 0.1 };
-    const docR2 = { content: 'delta echo foxtrot', metadata: { id: 'R2' }, score: 0.5 };
-    const docR3 = { content: 'golf hotel india', metadata: { id: 'R3' }, score: 0.9 };
+    // runs, with no embeddings available so it falls back to lexical Jaccard
+    // diversity. docHighA/docHighB are near-duplicates (4 of 5 tokens shared)
+    // with the two highest raw scores; docDiverse shares no tokens with either
+    // but has the lowest raw score. A raw-score re-sort would produce
+    // [HighA, HighB, Diverse]. MMR's greedy selection picks HighA first (best
+    // relevance), then — because HighB is heavily penalized for near-duplicating
+    // HighA while Diverse has zero overlap — picks Diverse next despite its
+    // lower relevance, producing [HighA, Diverse, HighB]. These two orders
+    // genuinely disagree (position 2 vs 3 swapped), so this fixture fails if the
+    // MMR gate regresses to the old raw-score re-sort. (The prior fixture used
+    // three mutually dissimilar docs, where MMR's diversity term is 0 for all
+    // three and its output coincides with plain relevance order — identical to
+    // the raw-score sort, which is why it passed even with the buggy gate.)
+    const docHighA = { content: 'red apple orange banana grape', metadata: { id: 'HighA' }, score: 0.9 };
+    const docHighB = { content: 'red apple orange banana melon', metadata: { id: 'HighB' }, score: 0.85 };
+    const docDiverse = { content: 'turtle rocket zebra volcano canyon', metadata: { id: 'Diverse' }, score: 0.5 };
     client.embedder.embedQuery = jest.fn().mockResolvedValue([0.1, 0.2]);
     client.embedder.embedDocuments = undefined;
-    client.vectorStore.similaritySearch = jest.fn().mockResolvedValue([docR1, docR2, docR3]);
+    client.vectorStore.similaritySearch = jest.fn().mockResolvedValue([docHighA, docHighB, docDiverse]);
     client.llm.generate = jest.fn().mockResolvedValue('an answer');
 
     const result = await client.queryRAG('what is this?');
 
-    expect(result.sources).toEqual([{ id: 'R3' }, { id: 'R2' }, { id: 'R1' }]);
+    expect(result.sources).toEqual([{ id: 'HighA' }, { id: 'Diverse' }, { id: 'HighB' }]);
   });
 
   it('still applies the keyword-boost re-sort on the plain vector-similarity path (no reranking, no hybrid)', async () => {
