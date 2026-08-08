@@ -20,7 +20,7 @@ class TelemetryManager {
     this.distinctId = null;
     this.queue = [];
     this.timer = null;
-    this.enabled = true;
+    this.enabled = false;
     this.initialized = false;
 
     this.globalProperties = {
@@ -37,7 +37,7 @@ class TelemetryManager {
   init(config = {}) {
     if (this.initialized) return;
 
-    if (config.telemetry?.enabled === false) {
+    if (config.telemetry?.enabled !== true) {
       this.enabled = false;
       return;
     }
@@ -50,6 +50,7 @@ class TelemetryManager {
       return;
     }
 
+    this.enabled = true;
     this._loadIdentity();
     this._startFlushTimer();
     this.initialized = true;

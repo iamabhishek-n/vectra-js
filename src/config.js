@@ -108,8 +108,8 @@ const RAGConfigSchema = z.object({
   metadata: z.object({ enrichment: z.boolean().default(false) }).optional(),
   ingestion: z.object({ rateLimitEnabled: z.boolean().default(false), concurrencyLimit: z.number().default(5) }).optional(),
   telemetry: z.object({
-    enabled: z.boolean().default(true),
-  }).default({ enabled: true }),
+    enabled: z.boolean().default(false),
+  }).default({ enabled: false }),
   memory: z.object({
     enabled: z.boolean().default(false),
     type: z.enum(['in-memory','redis','postgres']).default('in-memory'),
