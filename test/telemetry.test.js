@@ -28,6 +28,7 @@ describe('telemetry default-off behavior', () => {
     const mgr = require('../src/telemetry');
     mgr.init({ telemetry: { enabled: true } });
     expect(mgr.enabled).toBe(true);
+    mgr.shutdown();
     jest.restoreAllMocks();
   });
 
