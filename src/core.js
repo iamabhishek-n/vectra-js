@@ -346,7 +346,7 @@ class VectraClient {
 
   async _storeDocuments(documents, mode, absPath) {
     if (this.vectorStore && typeof this.vectorStore.ensureIndexes === 'function') {
-      try { await this.vectorStore.ensureIndexes(); } catch (_) {}
+      try { await this.vectorStore.ensureIndexes(this.config.embedding?.dimensions); } catch (_) {}
     }
     
     if (mode === 'replace' && this.vectorStore && typeof this.vectorStore.deleteDocuments === 'function') {
@@ -498,7 +498,7 @@ class VectraClient {
     // Store
     const absPaths = [...new Set(fileInfoList.map(info => info.validation.absolutePath))];
     if (this.vectorStore && typeof this.vectorStore.ensureIndexes === 'function') {
-      try { await this.vectorStore.ensureIndexes(); } catch (_) {}
+      try { await this.vectorStore.ensureIndexes(this.config.embedding?.dimensions); } catch (_) {}
     }
     
     if (mode === 'replace' && this.vectorStore && typeof this.vectorStore.deleteDocuments === 'function') {

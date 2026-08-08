@@ -51,7 +51,7 @@ class PostgresVectorStore extends VectorStore {
   }
 
   // Helper to ensure table and extension exist
-  async ensureIndexes() {
+  async ensureIndexes(dimensions = 1536) {
     await this._withConn(async (client) => {
         await client.query('CREATE EXTENSION IF NOT EXISTS vector');
         
@@ -68,7 +68,7 @@ class PostgresVectorStore extends VectorStore {
           if (String(e.message || e).includes('schema mismatch')) throw e;
         }
         
-        const dim = 1536;
+        const dim = dimensions || 1536;
         await client.query(`CREATE TABLE IF NOT EXISTS ${this._table} ("id" TEXT PRIMARY KEY, ${this._cContent} TEXT, ${this._cMeta} JSONB, ${this._cVec} vector(${dim}), "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
         
         try {

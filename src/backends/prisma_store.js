@@ -100,7 +100,7 @@ class PrismaVectorStore extends VectorStore {
     return Object.values(combined).sort((a, b) => b.score - a.score).slice(0, limit);
   }
 
-  async ensureIndexes() {
+  async ensureIndexes(dimensions = 1536) {
     const { clientInstance } = this.config;
     const base = this._tableBase;
     assertSafeIdentifier(base, 'tableName table');
@@ -108,7 +108,7 @@ class PrismaVectorStore extends VectorStore {
     const idxFts = `"${base}_content_fts_gin"`;
     try {
       await clientInstance.$executeRawUnsafe('CREATE EXTENSION IF NOT EXISTS vector');
-      await this._ensureColumns();
+      await this._ensureColumns(dimensions);
       await clientInstance.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ${idxVec} ON ${this._table} USING ivfflat (${this._cVec} vector_cosine_ops) WITH (lists = 100);`);
       await clientInstance.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ${idxFts} ON ${this._table} USING GIN (to_tsvector('english', ${this._cContent}));`);
     } catch (e) {
@@ -116,9 +116,9 @@ class PrismaVectorStore extends VectorStore {
     }
   }
   
-  async _ensureColumns() {
+  async _ensureColumns(dimensions = 1536) {
     const { clientInstance } = this.config;
-    const dim = 1536;
+    const dim = dimensions || 1536;
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS ${this._table} (
         "id" TEXT PRIMARY KEY,
