@@ -546,8 +546,9 @@ Vectra collects anonymous usage data to help us improve the SDK, prioritize feat
 * **Identity**: A random UUID (`distinct_id`) stored locally in `~/.vectra/telemetry.json`. **No PII, emails, IPs, or hostnames.**
 * **Events**:
     * `sdk_initialized`: Config shape (providers used), OS/Runtime version, session type (api/cli/chat).
-    * `ingest_started/completed`: Source type, chunking strategy, duration bucket, chunk count bucket.
-    * `query_executed`: Retrieval strategy, query mode (rag), result count, latency bucket.
+    * `ingest_batch_started`: File count, ingestion mode.
+    * `ingest_batch_completed`: File count, chunk count, duration in milliseconds.
+    * `query_executed`: Retrieval strategy, query mode (rag), reranking enabled, streaming, memory used, result count. No latency is currently tracked on this event.
     * `feature_used`: WebConfig/Dashboard usage.
     * `evaluation_run`: Dataset size bucket.
     * `error_occurred`: Error type and stage (no stack traces).
