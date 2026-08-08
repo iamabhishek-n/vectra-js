@@ -100,6 +100,40 @@ class ChromaVectorStore extends VectorStore {
         return out;
     }
 
+    _lexicalOverlap(query, content) {
+        const tokenize = (s) => new Set(String(s || '').toLowerCase().match(/[a-z0-9]+/g)?.filter(t => t.length > 2) || []);
+        const queryTokens = tokenize(query);
+        if (queryTokens.size === 0) return 0;
+        const contentTokens = tokenize(content);
+        let matches = 0;
+        for (const t of queryTokens) if (contentTokens.has(t)) matches++;
+        return matches / queryTokens.size;
+    }
+
+    async hybridSearch(text, vector, limit = 5, filter = null) {
+        const pool = await this.similaritySearch(vector, Math.max(limit * 4, 20), filter);
+        if (pool.length === 0) return [];
+        const withLexical = pool.map(d => ({ ...d, _lexical: this._lexicalOverlap(text, d.content) }));
+        const semanticRanked = [...withLexical].sort((a, b) => b.score - a.score);
+        const lexicalRanked = [...withLexical].sort((a, b) => b._lexical - a._lexical);
+        const rrfScores = new Map();
+        const addRanks = (ranked) => {
+            ranked.forEach((d, idx) => {
+                const key = d.content;
+                const prior = rrfScores.get(key) || 0;
+                rrfScores.set(key, prior + 1 / (60 + idx + 1));
+            });
+        };
+        addRanks(semanticRanked);
+        addRanks(lexicalRanked);
+        const seen = new Map();
+        for (const d of withLexical) if (!seen.has(d.content)) seen.set(d.content, d);
+        return Array.from(seen.values())
+            .sort((a, b) => (rrfScores.get(b.content) || 0) - (rrfScores.get(a.content) || 0))
+            .slice(0, limit)
+            .map(({ _lexical, ...rest }) => rest);
+    }
+
     async listDocuments({ filter = null, limit = 100, cursor = null } = {}) {
         await this._init();
         const lim = Math.max(1, Math.min(1000, Number(limit) || 100));
