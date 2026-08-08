@@ -106,7 +106,7 @@ const RAGConfigSchema = z.object({
   reranking: RerankingConfigSchema.default({}),
   sessionType: z.enum(['cli', 'api', 'chat']).default('api'),
   metadata: z.object({ enrichment: z.boolean().default(false) }).optional(),
-  ingestion: z.object({ rateLimitEnabled: z.boolean().default(false), concurrencyLimit: z.number().default(5) }).optional(),
+  ingestion: z.object({ rateLimitEnabled: z.boolean().default(false), concurrencyLimit: z.number().default(5), maxFileSizeBytes: z.number().default(52428800) }).optional(),
   telemetry: z.object({
     enabled: z.boolean().default(false),
   }).default({ enabled: false }),

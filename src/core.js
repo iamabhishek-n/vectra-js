@@ -285,6 +285,10 @@ class VectraClient {
   async _validateFile(filePath, stats) {
     const absPath = path.resolve(filePath);
     const size = stats.size || 0;
+    const maxSize = (this.config.ingestion && this.config.ingestion.maxFileSizeBytes) || 52428800;
+    if (size > maxSize) {
+      throw new Error(`File exceeds maximum allowed size: ${filePath} (${size} bytes > ${maxSize} bytes limit)`);
+    }
     const mtime = Math.floor(stats.mtimeMs || Date.now());
     const md5 = crypto.createHash('md5');
     const sha = crypto.createHash('sha256');
