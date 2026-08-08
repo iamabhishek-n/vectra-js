@@ -95,8 +95,22 @@ class CrossEncoderReranker {
     }
 
     async _jinaRerank(query, documents) {
-        // Implemented in Task 2.
-        return documents.slice(0, this.config.topN || documents.length);
+        const apiKey = this.config.apiKey || process.env.JINA_API_KEY;
+        if (!apiKey) return documents.slice(0, this.config.topN || documents.length);
+        const res = await fetch('https://api.jina.ai/v1/rerank', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify({
+                model: this.config.modelName || 'jina-reranker-v2-base-multilingual',
+                query,
+                documents: documents.map(d => d.content),
+                top_n: Math.min(this.config.topN || documents.length, documents.length),
+            }),
+            signal: AbortSignal.timeout(10000),
+        });
+        if (!res.ok) throw new Error(`Jina rerank API error: ${res.status}`);
+        const data = await res.json();
+        return data.results.map(r => documents[r.index]);
     }
 }
 
