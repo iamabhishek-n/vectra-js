@@ -716,18 +716,32 @@ class VectraClient {
       return union ? inter / union : 0;
     };
 
+    const cosineSimilarity = (a, b) => {
+      if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length || a.length === 0) return 0;
+      let dot = 0, normA = 0, normB = 0;
+      for (let i = 0; i < a.length; i++) {
+        dot += a[i] * b[i];
+        normA += a[i] * a[i];
+        normB += b[i] * b[i];
+      }
+      if (normA === 0 || normB === 0) return 0;
+      return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+    };
+
+    const useEmbeddings = candidates.every(d => Array.isArray(d.embedding) && d.embedding.length > 0);
+
     const pool = candidates.map((d) => ({
       ...d,
-      _tokens: tokens(d.content),
+      _tokens: useEmbeddings ? null : tokens(d.content),
       _rel: typeof d.score === 'number' ? d.score : Number(d.score) || 0,
     })).sort((a, b) => (b._rel || 0) - (a._rel || 0));
 
     const selected = [];
-    const selectedTokens = [];
+    const selectedDiversityKeys = [];
 
     const first = pool.shift();
     selected.push(first);
-    selectedTokens.push(first._tokens);
+    selectedDiversityKeys.push(useEmbeddings ? first.embedding : first._tokens);
 
     while (pool.length > 0 && selected.length < kInt) {
       let bestIdx = -1;
@@ -735,7 +749,9 @@ class VectraClient {
       for (let i = 0; i < pool.length; i++) {
         const d = pool[i];
         let div = 0;
-        for (const st of selectedTokens) div = Math.max(div, jaccard(d._tokens, st));
+        for (const key of selectedDiversityKeys) {
+          div = Math.max(div, useEmbeddings ? cosineSimilarity(d.embedding, key) : jaccard(d._tokens, key));
+        }
         const score = lam * d._rel - (1 - lam) * div;
         if (bestScore === null || score > bestScore) {
           bestScore = score;
@@ -745,7 +761,7 @@ class VectraClient {
       if (bestIdx < 0) break;
       const picked = pool.splice(bestIdx, 1)[0];
       selected.push(picked);
-      selectedTokens.push(picked._tokens);
+      selectedDiversityKeys.push(useEmbeddings ? picked.embedding : picked._tokens);
     }
 
     return selected.slice(0, kInt).map(({ _tokens, _rel, ...rest }) => rest);
@@ -802,6 +818,15 @@ class VectraClient {
             const fetchK = Math.max(Number(this.config.retrieval?.mmrFetchK) || 20, k);
             const lam = Number(this.config.retrieval?.mmrLambda) || 0.5;
             const candidates = await this.vectorStore.similaritySearch(queryVector, fetchK, filter);
+            if (candidates.length > 0 && typeof this.embedder.embedDocuments === 'function') {
+                try {
+                    const candidateEmbeddings = await this.embedder.embedDocuments(candidates.map(c => c.content));
+                    candidates.forEach((c, i) => { c.embedding = candidateEmbeddings[i]; });
+                } catch (_) {
+                    // Embedding-space MMR is best-effort; mmrSelect falls back to
+                    // lexical Jaccard diversity when embeddings aren't present.
+                }
+            }
             docs = this.mmrSelect(candidates, k, lam);
         } else {
             docs = await this.vectorStore.similaritySearch(queryVector, k, filter);
