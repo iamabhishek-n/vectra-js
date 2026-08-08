@@ -53,23 +53,50 @@ Example result format: [3, 1, 2]`;
 
 class CrossEncoderReranker {
     constructor(config) {
-        this.config = config;
+        this.config = config || {};
     }
 
     async rerank(query, documents) {
         if (!documents || documents.length === 0) return [];
-        const docsToRank = documents.slice(0, this.config.windowSize);
-        
-        // Placeholder for specific providers (Cohere, Jina, etc.)
-        if (this.config.provider === RerankingProvider.COHERE) {
-            return this._mockApiRerank(query, docsToRank);
+        try {
+            if (this.config.provider === RerankingProvider.COHERE) {
+                return await this._cohereRerank(query, documents);
+            }
+            if (this.config.provider === RerankingProvider.JINA) {
+                return await this._jinaRerank(query, documents);
+            }
+            if (this.config.provider === RerankingProvider.CROSS_ENCODER) {
+                throw new Error('RerankingProvider.CROSS_ENCODER (local model) is not implemented in vectra-js. Use RerankingProvider.COHERE, RerankingProvider.JINA, or RerankingProvider.LLM instead.');
+            }
+            return documents.slice(0, this.config.topN || documents.length);
+        } catch (e) {
+            if (this.config.provider === RerankingProvider.CROSS_ENCODER) throw e;
+            return documents.slice(0, this.config.topN || documents.length);
         }
-        
-        return documents.slice(0, this.config.topN);
     }
 
-    async _mockApiRerank(query, docs) {
-        return docs.slice(0, this.config.topN);
+    async _cohereRerank(query, documents) {
+        const apiKey = this.config.apiKey || process.env.COHERE_API_KEY;
+        if (!apiKey) return documents.slice(0, this.config.topN || documents.length);
+        const res = await fetch('https://api.cohere.com/v2/rerank', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify({
+                model: this.config.modelName || 'rerank-v3.5',
+                query,
+                documents: documents.map(d => d.content),
+                top_n: Math.min(this.config.topN || documents.length, documents.length),
+            }),
+            signal: AbortSignal.timeout(10000),
+        });
+        if (!res.ok) throw new Error(`Cohere rerank API error: ${res.status}`);
+        const data = await res.json();
+        return data.results.map(r => documents[r.index]);
+    }
+
+    async _jinaRerank(query, documents) {
+        // Implemented in Task 2.
+        return documents.slice(0, this.config.topN || documents.length);
     }
 }
 
