@@ -50,6 +50,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
     "@google/genai": "^1.34.0",
+    "js-tiktoken": "^1.0.14",
     "mammoth": "^1.11.0",
     "openai": "^6.15.0",
     "pdf-parse": "^2.4.5",

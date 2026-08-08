@@ -22,6 +22,7 @@ const { v4: uuidv4 } = require('uuid');
 const SQLiteLogger = require('./observability');
 const telemetry = require('./telemetry');
 const EventEmitter = require('events');
+const { getEncoding } = require('js-tiktoken');
 
 class LRUCache {
   constructor(maxSize = 10000) {
@@ -64,6 +65,8 @@ const DEFAULT_CONCURRENCY_LIMIT = 5;
 const DEFAULT_RETRY_ATTEMPTS = 3;
 const DEFAULT_INITIAL_RETRY_DELAY = 500;
 const DEFAULT_MAX_RETRY_DELAY = 4000;
+
+const tokenEncoder = getEncoding('cl100k_base');
 
 class VectraClient {
   constructor(config) {
@@ -588,12 +591,7 @@ class VectraClient {
 
   tokenEstimate(text) {
     if (!text) return 0;
-    let asciiChars = 0;
-    for (let i = 0; i < text.length; i++) {
-        if (text.charCodeAt(i) < 128) asciiChars++;
-    }
-    const nonAscii = text.length - asciiChars;
-    return Math.max(1, Math.floor((asciiChars + 3) / 4) + nonAscii);
+    return tokenEncoder.encode(String(text)).length;
   }
 
   buildContextParts(docs, query) {
