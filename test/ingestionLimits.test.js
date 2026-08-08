@@ -27,4 +27,10 @@ describe('_validateFile file-size limit', () => {
     await expect(client._validateFile('/tmp/huge.txt', { size: 52428801, mtimeMs: Date.now() }))
       .rejects.toThrow('File exceeds maximum allowed size');
   });
+
+  it('rejects any file when maxFileSizeBytes is explicitly 0', async () => {
+    const client = makeClient(0);
+    await expect(client._validateFile('/tmp/tiny.txt', { size: 1, mtimeMs: Date.now() }))
+      .rejects.toThrow('File exceeds maximum allowed size');
+  });
 });

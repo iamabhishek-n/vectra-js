@@ -285,7 +285,8 @@ class VectraClient {
   async _validateFile(filePath, stats) {
     const absPath = path.resolve(filePath);
     const size = stats.size || 0;
-    const maxSize = (this.config.ingestion && this.config.ingestion.maxFileSizeBytes) || 52428800;
+    const configuredMax = this.config.ingestion && this.config.ingestion.maxFileSizeBytes;
+    const maxSize = typeof configuredMax === 'number' ? configuredMax : 52428800;
     if (size > maxSize) {
       throw new Error(`File exceeds maximum allowed size: ${filePath} (${size} bytes > ${maxSize} bytes limit)`);
     }

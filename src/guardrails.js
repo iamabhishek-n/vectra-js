@@ -26,12 +26,18 @@ function checkGuardrails(query, guardrailsConfig) {
   const cfg = guardrailsConfig;
   const text = String(query || '');
 
-  if (cfg.maxQueryLength && text.length > cfg.maxQueryLength) {
+  if (typeof cfg.maxQueryLength === 'number' && text.length > cfg.maxQueryLength) {
     throw new Error(`GuardrailViolation: query exceeds maxQueryLength (${text.length} > ${cfg.maxQueryLength})`);
   }
 
   if (cfg.blockPii) {
-    for (const { name, regex } of PII_PATTERNS) {
+    // The email pattern can only ever match text containing '@'; skip it
+    // entirely on text with no '@' to avoid catastrophic backtracking on
+    // long inputs with no match (see ReDoS fix — cheap O(n) pre-check).
+    if (text.includes('@') && PII_PATTERNS[0].regex.test(text)) {
+      throw new Error(`GuardrailViolation: possible PII detected (${PII_PATTERNS[0].name})`);
+    }
+    for (const { name, regex } of PII_PATTERNS.slice(1)) {
       if (regex.test(text)) {
         throw new Error(`GuardrailViolation: possible PII detected (${name})`);
       }

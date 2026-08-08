@@ -13,6 +13,11 @@ describe('checkGuardrails - maxQueryLength', () => {
   it('does nothing when maxQueryLength is not set', () => {
     expect(() => checkGuardrails('a'.repeat(100000), {})).not.toThrow();
   });
+
+  it('rejects everything when maxQueryLength is explicitly 0', () => {
+    expect(() => checkGuardrails('a'.repeat(10), { maxQueryLength: 0 }))
+      .toThrow('GuardrailViolation: query exceeds maxQueryLength');
+  });
 });
 
 describe('checkGuardrails - blockPii', () => {
@@ -46,6 +51,13 @@ describe('checkGuardrails - blockPii', () => {
 
   it('does nothing when guardrailsConfig is undefined', () => {
     expect(() => checkGuardrails('anything', undefined)).not.toThrow();
+  });
+
+  it('does not hang (ReDoS) on a long string with no "@" character', () => {
+    // Regression test: the email pattern used to exhibit catastrophic
+    // backtracking on long text with no '@'. This must complete well
+    // within Jest's default 5000ms test timeout.
+    expect(() => checkGuardrails('a'.repeat(50000), { blockPii: true })).not.toThrow();
   });
 });
 
