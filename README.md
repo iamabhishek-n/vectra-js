@@ -41,11 +41,12 @@ If you find this project useful, consider supporting it:<br>
   * [Observability Dashboard](#observability-dashboard)
 * [13. Observability & Callbacks](#13-observability--callbacks)
 * [14. Telemetry](#14-telemetry)
-* [15. Database Schemas & Indexing](#15-database-schemas--indexing)
-* [16. Extending Vectra](#16-extending-vectra)
-* [17. Architecture Overview](#17-architecture-overview)
-* [18. Development & Contribution Guide](#18-development--contribution-guide)
-* [19. Production Best Practices](#19-production-best-practices)
+* [15. Guardrails](#15-guardrails)
+* [16. Database Schemas & Indexing](#16-database-schemas--indexing)
+* [17. Extending Vectra](#17-extending-vectra)
+* [18. Architecture Overview](#18-architecture-overview)
+* [19. Development & Contribution Guide](#19-development--contribution-guide)
+* [20. Production Best Practices](#20-production-best-practices)
 
 ---
 
@@ -577,7 +578,34 @@ Even when opted in, telemetry is force-disabled if `VECTRA_TELEMETRY_DISABLED=1`
 
 ---
 
-## 15. Database Schemas & Indexing
+## 15. Guardrails
+
+As of this version, `queryRAG` enforces basic guardrails by default:
+
+- **`maxQueryLength`** (default: 2000 characters) — queries longer than this are rejected before any embedding or LLM call.
+- **`blockPii`** (default: off) — when enabled, rejects queries containing an apparent email address, phone number, SSN-shaped number, or long digit run.
+- **`contentFilter`** (default: off) — when enabled, rejects queries matching a small built-in list of clearly harmful phrases, plus any custom terms supplied via `blockedTerms`.
+- **`blockedTerms`** (default: `[]`) — additional terms to combine with the built-in `contentFilter` list. Only used when `contentFilter` is enabled.
+
+Document ingestion also enforces a file-size limit by default:
+
+- **`ingestion.maxFileSizeBytes`** (default: 52428800 = 50MB) — files larger than this are rejected before being read.
+
+**If you're upgrading from an earlier version:** the 2000-character query limit and 50MB file-size limit are new as of this release and are enforced even if you don't set a `guardrails` or `ingestion` block in your config — they were previously present in the config schema but not enforced. To raise or effectively disable a limit, set it explicitly:
+
+```js
+const client = new VectraClient({
+  // ...
+  guardrails: { maxQueryLength: 10000, contentFilter: true, blockedTerms: ['my custom blocked phrase'] },
+  ingestion: { maxFileSizeBytes: 200 * 1024 * 1024 }, // 200MB
+});
+```
+
+See `src/guardrails.js` for the exact PII/content-filter detection logic.
+
+---
+
+## 16. Database Schemas & Indexing
 
 ```prisma
 model Document {
@@ -591,7 +619,7 @@ model Document {
 
 ---
 
-## 16. Extending Vectra
+## 17. Extending Vectra
 
 ### Custom Vector Store
 
@@ -604,7 +632,7 @@ class MyStore extends VectorStore {
 
 ---
 
-## 17. Architecture Overview
+## 18. Architecture Overview
 
 * `VectraClient`: orchestrator
 * Typed config schema
@@ -613,7 +641,7 @@ class MyStore extends VectorStore {
 
 ---
 
-## 18. Development & Contribution Guide
+## 19. Development & Contribution Guide
 
 * Node.js 18+
 * pnpm recommended
@@ -621,7 +649,7 @@ class MyStore extends VectorStore {
 
 ---
 
-## 19. Production Best Practices
+## 20. Production Best Practices
 
 * Match embedding dimensions to pgvector
 * Prefer HYBRID retrieval
