@@ -30,32 +30,39 @@ describe('CrossEncoderReranker - Cohere', () => {
     expect(body.top_n).toBe(2);
   });
 
-  it('throws a clear error when no API key is configured', async () => {
+  it('falls back to passthrough when no API key is configured, warning on the way out', async () => {
+    global.fetch = jest.fn();
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const reranker = new CrossEncoderReranker({ provider: 'cohere', topN: 2 });
     delete process.env.COHERE_API_KEY;
     await expect(reranker.rerank('q', makeDocs(2))).resolves.toEqual(makeDocs(2).slice(0, 2));
     // Falls back to passthrough (fail-soft), not a thrown error to the caller —
     // but verify it didn't attempt a network call with no key.
-    expect(global.fetch).not.toBeDefined || true;
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Cohere rerank failed'));
   });
 
-  it('falls back to original order on a non-ok HTTP response', async () => {
+  it('falls back to original order on a non-ok HTTP response, warning on the way out', async () => {
     const docs = makeDocs(3);
     global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 500 });
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const reranker = new CrossEncoderReranker({ provider: 'cohere', apiKey: 'test-key', topN: 2 });
 
     const result = await reranker.rerank('q', docs);
 
     expect(result).toEqual(docs.slice(0, 2));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Cohere rerank failed'));
   });
 
-  it('falls back to original order when fetch itself rejects', async () => {
+  it('falls back to original order when fetch itself rejects, warning on the way out', async () => {
     const docs = makeDocs(3);
     global.fetch = jest.fn().mockRejectedValue(new Error('network down'));
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const reranker = new CrossEncoderReranker({ provider: 'cohere', apiKey: 'test-key', topN: 2 });
 
     const result = await reranker.rerank('q', docs);
 
     expect(result).toEqual(docs.slice(0, 2));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Cohere rerank failed'));
   });
 });

@@ -66,7 +66,11 @@ const DEFAULT_RETRY_ATTEMPTS = 3;
 const DEFAULT_INITIAL_RETRY_DELAY = 500;
 const DEFAULT_MAX_RETRY_DELAY = 4000;
 
-const tokenEncoder = getEncoding('cl100k_base');
+let _tokenEncoder = null;
+function getTokenEncoder() {
+  if (!_tokenEncoder) _tokenEncoder = getEncoding('cl100k_base');
+  return _tokenEncoder;
+}
 
 class VectraClient {
   constructor(config) {
@@ -591,7 +595,7 @@ class VectraClient {
 
   tokenEstimate(text) {
     if (!text) return 0;
-    return tokenEncoder.encode(String(text)).length;
+    return getTokenEncoder().encode(String(text)).length;
   }
 
   buildContextParts(docs, query) {
@@ -816,16 +820,25 @@ class VectraClient {
             const fetchK = Math.max(Number(this.config.retrieval?.mmrFetchK) || 20, k);
             const lam = Number(this.config.retrieval?.mmrLambda) || 0.5;
             const candidates = await this.vectorStore.similaritySearch(queryVector, fetchK, filter);
-            if (candidates.length > 0 && typeof this.embedder.embedDocuments === 'function') {
-                try {
-                    const candidateEmbeddings = await this.embedder.embedDocuments(candidates.map(c => c.content));
-                    candidates.forEach((c, i) => { c.embedding = candidateEmbeddings[i]; });
-                } catch (_) {
-                    // Embedding-space MMR is best-effort; mmrSelect falls back to
-                    // lexical Jaccard diversity when embeddings aren't present.
+            if (fetchK <= k) {
+                // fetchK is clamped to be at least k, so fetchK <= k means fetchK === k:
+                // similaritySearch already returned at most k candidates, so mmrSelect
+                // would have nothing to select from beyond that. Skip the batch
+                // embedDocuments call (pure waste, e.g. when reranking sets k to
+                // windowSize) and the mmrSelect pass entirely.
+                docs = candidates;
+            } else {
+                if (candidates.length > 0 && typeof this.embedder.embedDocuments === 'function') {
+                    try {
+                        const candidateEmbeddings = await this.embedder.embedDocuments(candidates.map(c => c.content));
+                        candidates.forEach((c, i) => { c.embedding = candidateEmbeddings[i]; });
+                    } catch (_) {
+                        // Embedding-space MMR is best-effort; mmrSelect falls back to
+                        // lexical Jaccard diversity when embeddings aren't present.
+                    }
                 }
+                docs = this.mmrSelect(candidates, k, lam);
             }
-            docs = this.mmrSelect(candidates, k, lam);
         } else {
             docs = await this.vectorStore.similaritySearch(queryVector, k, filter);
         }
@@ -861,12 +874,22 @@ class VectraClient {
             modelName: embeddingModelName
         });
 
-        const terms = query.toLowerCase().split(/\W+/).filter(t=>t.length>2);
-        docs = docs.map(d => {
-          const kws = Array.isArray(d.metadata?.keywords) ? d.metadata.keywords.map(k=>String(k).toLowerCase()) : [];
-          const match = terms.reduce((acc,t)=>acc + (kws.includes(t)?1:0), 0);
-          return { ...d, _boost: match };
-        }).sort((a,b)=> ((b.score||0) + 0.1 * (b._boost||0)) - ((a.score||0) + 0.1 * (a._boost||0)));
+        // Keyword-boost re-sort: only safe to apply to the plain vector-similarity
+        // retrieval path. Reranking (Cohere/Jina/LLM) and hybrid search (RRF fusion)
+        // already produce an authoritative final order — recomputing a sort from raw
+        // `score` here would silently discard that order, and for stores like Milvus
+        // (where raw score can be an unnormalized, lower-is-better distance) would
+        // actively invert it. See final-review-fix-brief Critical #1/#2.
+        const rerankingApplied = !!(this.config.reranking && this.config.reranking.enabled && this.reranker);
+        const hybridApplied = strategy === RetrievalStrategy.HYBRID;
+        if (!rerankingApplied && !hybridApplied) {
+          const terms = query.toLowerCase().split(/\W+/).filter(t=>t.length>2);
+          docs = docs.map(d => {
+            const kws = Array.isArray(d.metadata?.keywords) ? d.metadata.keywords.map(k=>String(k).toLowerCase()) : [];
+            const match = terms.reduce((acc,t)=>acc + (kws.includes(t)?1:0), 0);
+            return { ...d, _boost: match };
+          }).sort((a,b)=> ((b.score||0) + 0.1 * (b._boost||0)) - ((a.score||0) + 0.1 * (a._boost||0)));
+        }
 
         const citationsEnabled = !!(this.config.generation && this.config.generation.structuredOutput === 'citations')
           && !(this.config.grounding && this.config.grounding.enabled && this.config.grounding.strict);

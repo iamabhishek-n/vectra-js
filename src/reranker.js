@@ -77,40 +77,56 @@ class CrossEncoderReranker {
 
     async _cohereRerank(query, documents) {
         const apiKey = this.config.apiKey || process.env.COHERE_API_KEY;
-        if (!apiKey) return documents.slice(0, this.config.topN || documents.length);
-        const res = await fetch('https://api.cohere.com/v2/rerank', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-            body: JSON.stringify({
-                model: this.config.modelName || 'rerank-v3.5',
-                query,
-                documents: documents.map(d => d.content),
-                top_n: Math.min(this.config.topN || documents.length, documents.length),
-            }),
-            signal: AbortSignal.timeout(10000),
-        });
-        if (!res.ok) throw new Error(`Cohere rerank API error: ${res.status}`);
-        const data = await res.json();
-        return data.results.map(r => documents[r.index]);
+        if (!apiKey) {
+            console.warn('Cohere rerank failed (missing API key), falling back to unranked results');
+            return documents.slice(0, this.config.topN || documents.length);
+        }
+        try {
+            const res = await fetch('https://api.cohere.com/v2/rerank', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+                body: JSON.stringify({
+                    model: this.config.modelName || 'rerank-v3.5',
+                    query,
+                    documents: documents.map(d => d.content),
+                    top_n: Math.min(this.config.topN || documents.length, documents.length),
+                }),
+                signal: AbortSignal.timeout(10000),
+            });
+            if (!res.ok) throw new Error(`Cohere rerank API error: ${res.status}`);
+            const data = await res.json();
+            return data.results.map(r => documents[r.index]);
+        } catch (e) {
+            console.warn(`Cohere rerank failed (${e.message}), falling back to unranked results`);
+            return documents.slice(0, this.config.topN || documents.length);
+        }
     }
 
     async _jinaRerank(query, documents) {
         const apiKey = this.config.apiKey || process.env.JINA_API_KEY;
-        if (!apiKey) return documents.slice(0, this.config.topN || documents.length);
-        const res = await fetch('https://api.jina.ai/v1/rerank', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-            body: JSON.stringify({
-                model: this.config.modelName || 'jina-reranker-v2-base-multilingual',
-                query,
-                documents: documents.map(d => d.content),
-                top_n: Math.min(this.config.topN || documents.length, documents.length),
-            }),
-            signal: AbortSignal.timeout(10000),
-        });
-        if (!res.ok) throw new Error(`Jina rerank API error: ${res.status}`);
-        const data = await res.json();
-        return data.results.map(r => documents[r.index]);
+        if (!apiKey) {
+            console.warn('Jina rerank failed (missing API key), falling back to unranked results');
+            return documents.slice(0, this.config.topN || documents.length);
+        }
+        try {
+            const res = await fetch('https://api.jina.ai/v1/rerank', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+                body: JSON.stringify({
+                    model: this.config.modelName || 'jina-reranker-v2-base-multilingual',
+                    query,
+                    documents: documents.map(d => d.content),
+                    top_n: Math.min(this.config.topN || documents.length, documents.length),
+                }),
+                signal: AbortSignal.timeout(10000),
+            });
+            if (!res.ok) throw new Error(`Jina rerank API error: ${res.status}`);
+            const data = await res.json();
+            return data.results.map(r => documents[r.index]);
+        } catch (e) {
+            console.warn(`Jina rerank failed (${e.message}), falling back to unranked results`);
+            return documents.slice(0, this.config.topN || documents.length);
+        }
     }
 }
 

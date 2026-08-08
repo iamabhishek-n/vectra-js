@@ -26,7 +26,29 @@ class MilvusVectorStore extends VectorStore {
       res = await this.client.search({ collection_name: this.collection, data: [vector], limit: lim });
     }
     const hits = res.results ? res.results : res;
-    return hits.map(h => ({ content: h.content || '', metadata: h.metadata ? JSON.parse(h.metadata) : {}, score: h.distance }));
+    return hits.map(h => ({
+      content: h.content || '',
+      metadata: h.metadata ? JSON.parse(h.metadata) : {},
+      score: this._normalizeScore(h.score ?? h.distance),
+    }));
+  }
+
+  // The real @zilliz/milvus2-sdk-node `search()` result carries a `score` field
+  // (not `distance`), whose direction depends on the collection's configured
+  // metric: higher-is-better for COSINE/IP, lower-is-better for L2. This class's
+  // constructor/config doesn't currently expose the metric type, so we normalize
+  // to higher-is-better here with a documented heuristic: a value already inside
+  // [0, 1] is assumed to be a similarity score (COSINE-like) and is passed
+  // through unchanged; a larger, unbounded value is assumed to be an L2-style
+  // distance and is inverted into a bounded (0, 1] similarity via 1 / (1 + score).
+  // Normalizing at this single source point lets the rest of the codebase
+  // (hybridSearch, core.js) assume standard "higher score = better match"
+  // semantics, same as every other supported vector store.
+  _normalizeScore(raw) {
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return 0;
+    if (n >= 0 && n <= 1) return n;
+    return 1 / (1 + n);
   }
   _lexicalOverlap(query, content) {
     const tokenize = (s) => new Set(String(s || '').toLowerCase().match(/[a-z0-9]+/g)?.filter(t => t.length > 2) || []);
@@ -42,7 +64,7 @@ class MilvusVectorStore extends VectorStore {
     const pool = await this.similaritySearch(vector, Math.max(limit * 4, 20), filter);
     if (pool.length === 0) return [];
     const withLexical = pool.map(d => ({ ...d, _lexical: this._lexicalOverlap(text, d.content) }));
-    const semanticRanked = [...withLexical].sort((a, b) => a.score - b.score);
+    const semanticRanked = [...withLexical].sort((a, b) => b.score - a.score);
     const lexicalRanked = [...withLexical].sort((a, b) => b._lexical - a._lexical);
     const rrfScores = new Map();
     const addRanks = (ranked) => {

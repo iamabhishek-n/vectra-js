@@ -28,25 +28,29 @@ describe('CrossEncoderReranker - Jina', () => {
     expect(body.top_n).toBe(2);
   });
 
-  it('falls back to original order on a non-ok HTTP response', async () => {
+  it('falls back to original order on a non-ok HTTP response, warning on the way out', async () => {
     const docs = makeDocs(3);
     global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 429 });
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const reranker = new CrossEncoderReranker({ provider: 'jina', apiKey: 'test-key', topN: 2 });
 
     const result = await reranker.rerank('q', docs);
 
     expect(result).toEqual(docs.slice(0, 2));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Jina rerank failed'));
   });
 
-  it('falls back to original order with no API key configured', async () => {
+  it('falls back to original order with no API key configured, warning on the way out', async () => {
     delete process.env.JINA_API_KEY;
     const docs = makeDocs(2);
     global.fetch = jest.fn();
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const reranker = new CrossEncoderReranker({ provider: 'jina', topN: 2 });
 
     const result = await reranker.rerank('q', docs);
 
     expect(result).toEqual(docs);
     expect(global.fetch).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Jina rerank failed'));
   });
 });
