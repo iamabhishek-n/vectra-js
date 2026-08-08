@@ -10,6 +10,17 @@ const PII_PATTERNS = [
   { name: 'long_digit_run', regex: /\b(?:\d[ -]?){13,19}\b/ },
 ];
 
+// Minimal seed list of clearly harmful query patterns. This is a baseline,
+// not exhaustive content moderation — extend DEFAULT_BLOCKED_TERMS for your
+// deployment's needs, or replace checkGuardrails' contentFilter branch with
+// an LLM-based classifier if you need semantic (not just keyword) coverage.
+const DEFAULT_BLOCKED_TERMS = [
+  'how to make a bomb',
+  'how to build a bomb',
+  'how to make explosives',
+  'how to synthesize a bioweapon',
+];
+
 function checkGuardrails(query, guardrailsConfig) {
   if (!guardrailsConfig) return;
   const cfg = guardrailsConfig;
@@ -26,6 +37,15 @@ function checkGuardrails(query, guardrailsConfig) {
       }
     }
   }
+
+  if (cfg.contentFilter) {
+    const lower = text.toLowerCase();
+    for (const term of DEFAULT_BLOCKED_TERMS) {
+      if (lower.includes(term)) {
+        throw new Error('GuardrailViolation: query blocked by content filter');
+      }
+    }
+  }
 }
 
-module.exports = { checkGuardrails, PII_PATTERNS };
+module.exports = { checkGuardrails, PII_PATTERNS, DEFAULT_BLOCKED_TERMS };

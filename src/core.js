@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { RAGConfigSchema, ProviderType, RetrievalStrategy } = require('./config');
+const { checkGuardrails } = require('./guardrails');
 const crypto = require('crypto');
 const { DocumentProcessor } = require('./processor');
 const { OpenAIBackend } = require('./backends/openai');
@@ -746,6 +747,7 @@ class VectraClient {
   }
 
   async queryRAG(query, filter = null, stream = false, sessionId = null) {
+    checkGuardrails(query, this.config.guardrails);
     const traceId = uuidv4();
     const rootSpanId = uuidv4();
     const tStart = Date.now();
@@ -1139,5 +1141,5 @@ Return JSON: {"claims": [{"claim": "...", "supported": true, "evidence": "..."}]
   }
 }
 
-module.exports = { VectraClient };
+module.exports = { VectraClient, ProviderType };
 

@@ -48,3 +48,23 @@ describe('checkGuardrails - blockPii', () => {
     expect(() => checkGuardrails('anything', undefined)).not.toThrow();
   });
 });
+
+describe('checkGuardrails - contentFilter', () => {
+  it('allows an ordinary query when contentFilter is off', () => {
+    expect(() => checkGuardrails('how do I make a sandwich', { contentFilter: false })).not.toThrow();
+  });
+
+  it('rejects a query matching a blocked term when contentFilter is on', () => {
+    expect(() => checkGuardrails('how to make a bomb at home', { contentFilter: true }))
+      .toThrow('GuardrailViolation: query blocked by content filter');
+  });
+
+  it('is case-insensitive', () => {
+    expect(() => checkGuardrails('HOW TO MAKE A BOMB', { contentFilter: true }))
+      .toThrow('GuardrailViolation: query blocked by content filter');
+  });
+
+  it('allows an unrelated query when contentFilter is on', () => {
+    expect(() => checkGuardrails('what vector stores does this SDK support?', { contentFilter: true })).not.toThrow();
+  });
+});
