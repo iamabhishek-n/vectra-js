@@ -767,12 +767,13 @@ git commit -m "test: add MilvusVectorStore integration test"
 
 ### Task 10: Relicense to MIT
 
+**Update (2026-08-08):** between this plan being written and executed, upstream `origin/master` picked up two commits (`7f52a62` "Add LICENSE file - MIT", `ee9c2a6` "MIT Update") that already replaced `LICENSE` with correct MIT text — confirmed by direct read, it matches this task's originally-planned text verbatim. Those commits did **not** touch `package.json`'s `license` field, which is why the contradiction (MIT license text, GPL-3.0 package metadata) still exists. This task is now a one-line fix, not a full replace.
+
 **Files:**
 - Modify: `package.json:52` (license field)
-- Modify: `LICENSE` (full replace)
 
 **Interfaces:**
-- Produces: `package.json`'s `"license"` field reads `"MIT"`; `LICENSE` contains the MIT license text. No other file in this repo currently references the license (confirmed: no GPL/license mentions in `README.md`).
+- Produces: `package.json`'s `"license"` field reads `"MIT"`, matching the `LICENSE` file already on disk. No other file in this repo currently references the license (confirmed: no GPL/license mentions in `README.md`).
 
 - [ ] **Step 1: Update package.json**
 
@@ -788,33 +789,10 @@ to:
   "license": "MIT",
 ```
 
-- [ ] **Step 2: Replace the LICENSE file**
+- [ ] **Step 2: Confirm LICENSE already matches (no edit needed)**
 
-Overwrite `LICENSE` with:
-
-```
-MIT License
-
-Copyright (c) 2026 Abhishek N
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
+Run: `head -1 LICENSE`
+Expected: `MIT License` — if this does NOT match, stop and report back rather than overwriting; the file may have changed again upstream since this plan was updated.
 
 - [ ] **Step 3: Run the full suite one last time**
 
@@ -824,8 +802,8 @@ Expected: all tests from Tasks 2-9 pass (license changes don't affect runtime be
 - [ ] **Step 4: Commit**
 
 ```bash
-git add package.json LICENSE
-git commit -m "chore: relicense from GPL-3.0 to MIT"
+git add package.json
+git commit -m "fix: align package.json license field with MIT LICENSE file"
 ```
 
 ---
