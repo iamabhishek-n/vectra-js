@@ -61,8 +61,8 @@
     "@prisma/client": "^5.0.0"
   },
   "devDependencies": {
-    "@babel/core": "^8.0.1",
-    "@babel/preset-env": "^8.0.2",
+    "@babel/core": "^7.24.0",
+    "@babel/preset-env": "^7.24.0",
     "@chroma-core/default-embed": "^0.1.9",
     "chromadb": "^3.4.0",
     "dotenv": "^17.3.1",
