@@ -1,7 +1,17 @@
 const { VectorStore } = require('../interfaces');
 
 class MilvusVectorStore extends VectorStore {
-  constructor(config) { super(); this.config = config; this.client = config.clientInstance; this.collection = config.tableName || 'rag_collection'; }
+  constructor(config) {
+    super();
+    this.config = config;
+    this.client = config.clientInstance;
+    this.collection = config.tableName || 'rag_collection';
+    // Score interpretation is metric-dependent and can't be inferred from a
+    // search-hit object alone, so it must be told explicitly. Default to
+    // 'COSINE' (Milvus's own common default) which preserves the old
+    // passthrough behavior for the common case.
+    this.metricType = (config.metricType || 'COSINE').toUpperCase();
+  }
   async addDocuments(documents) {
     const data = documents.map((doc) => ({ vector: doc.embedding, content: doc.content, metadata: JSON.stringify(doc.metadata) }));
     await this.client.insert({ collection_name: this.collection, fields_data: data });
@@ -35,20 +45,28 @@ class MilvusVectorStore extends VectorStore {
 
   // The real @zilliz/milvus2-sdk-node `search()` result carries a `score` field
   // (not `distance`), whose direction depends on the collection's configured
-  // metric: higher-is-better for COSINE/IP, lower-is-better for L2. This class's
-  // constructor/config doesn't currently expose the metric type, so we normalize
-  // to higher-is-better here with a documented heuristic: a value already inside
-  // [0, 1] is assumed to be a similarity score (COSINE-like) and is passed
-  // through unchanged; a larger, unbounded value is assumed to be an L2-style
-  // distance and is inverted into a bounded (0, 1] similarity via 1 / (1 + score).
+  // metric: higher-is-better for COSINE/IP, lower-is-better for L2. Score
+  // interpretation genuinely depends on which metric the collection was created
+  // with, and that information isn't recoverable from the search-hit object
+  // alone — so it's read from the explicit `metricType` config option (default
+  // 'COSINE', matching Milvus's own common default) instead of being guessed
+  // from the value's magnitude.
+  //
+  // COSINE and IP are already higher-is-better in Milvus's convention, so they
+  // pass through unchanged (this also preserves the old, pre-normalization
+  // passthrough behavior, and correctly handles COSINE's real [-1, 1] range,
+  // including negative/dissimilar scores). L2 distance is always >= 0 and
+  // lower-is-better, so it's inverted via a monotonic 1 / (1 + score) transform
+  // with no boundary or negative-value issues.
+  //
   // Normalizing at this single source point lets the rest of the codebase
   // (hybridSearch, core.js) assume standard "higher score = better match"
   // semantics, same as every other supported vector store.
   _normalizeScore(raw) {
     const n = Number(raw);
     if (!Number.isFinite(n)) return 0;
-    if (n >= 0 && n <= 1) return n;
-    return 1 / (1 + n);
+    if (this.metricType === 'L2') return 1 / (1 + n);
+    return n;
   }
   _lexicalOverlap(query, content) {
     const tokenize = (s) => new Set(String(s || '').toLowerCase().match(/[a-z0-9]+/g)?.filter(t => t.length > 2) || []);

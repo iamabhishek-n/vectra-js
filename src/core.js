@@ -875,14 +875,18 @@ class VectraClient {
         });
 
         // Keyword-boost re-sort: only safe to apply to the plain vector-similarity
-        // retrieval path. Reranking (Cohere/Jina/LLM) and hybrid search (RRF fusion)
-        // already produce an authoritative final order — recomputing a sort from raw
-        // `score` here would silently discard that order, and for stores like Milvus
-        // (where raw score can be an unnormalized, lower-is-better distance) would
-        // actively invert it. See final-review-fix-brief Critical #1/#2.
+        // retrieval path. Reranking (Cohere/Jina/LLM), hybrid search (RRF fusion),
+        // multi-query (also RRF fusion, see reciprocalRankFusion above), and MMR
+        // (greedy diversity selection) already produce an authoritative final order —
+        // recomputing a sort from raw `score` here would silently discard that order,
+        // and for stores like Milvus (where raw score can be an unnormalized,
+        // lower-is-better distance) would actively invert it.
+        // See final-review-fix-brief Critical #1/#2 and round-2 Issue A.
         const rerankingApplied = !!(this.config.reranking && this.config.reranking.enabled && this.reranker);
         const hybridApplied = strategy === RetrievalStrategy.HYBRID;
-        if (!rerankingApplied && !hybridApplied) {
+        const multiQueryApplied = strategy === RetrievalStrategy.MULTI_QUERY;
+        const mmrApplied = strategy === RetrievalStrategy.MMR;
+        if (!rerankingApplied && !hybridApplied && !multiQueryApplied && !mmrApplied) {
           const terms = query.toLowerCase().split(/\W+/).filter(t=>t.length>2);
           docs = docs.map(d => {
             const kws = Array.isArray(d.metadata?.keywords) ? d.metadata.keywords.map(k=>String(k).toLowerCase()) : [];

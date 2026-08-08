@@ -35,4 +35,26 @@ describe('MilvusVectorStore.hybridSearch', () => {
     expect(results).toHaveLength(2);
     expect(results.map(r => r.content)).not.toContain('a completely unrelated sentence');
   });
+
+  it('fuses correctly under metricType: L2, where lower raw distance means a better semantic match', async () => {
+    // Raw L2 distances are lower-is-better: the closest match ('the quick brown
+    // fox') has the smallest distance. After _normalizeScore inverts these to
+    // higher-is-better, the semantic ranking used by the RRF fusion should still
+    // correctly favor the closest (smallest-distance) result.
+    const search = jest.fn().mockResolvedValue({
+      results: [
+        { content: 'the quick brown fox', metadata: '{}', score: 0.1 },
+        { content: 'a completely unrelated sentence', metadata: '{}', score: 2.0 },
+        { content: 'quick fox jumps high', metadata: '{}', score: 0.3 },
+      ],
+    });
+    const store = new MilvusVectorStore({ tableName: 'rag_collection', clientInstance: { search }, metricType: 'L2' });
+
+    const results = await store.hybridSearch('quick fox', [0.1, 0.2], 2);
+
+    expect(results).toHaveLength(2);
+    expect(results.map(r => r.content)).not.toContain('a completely unrelated sentence');
+    // Fused ranking should place the closest (smallest raw distance) result first.
+    expect(results[0].content).toBe('the quick brown fox');
+  });
 });
