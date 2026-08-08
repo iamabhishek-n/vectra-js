@@ -240,4 +240,4 @@ class PostgresVectorStore extends VectorStore {
   }
 }
 
-module.exports = { PostgresVectorStore };
+module.exports = { PostgresVectorStore, isSafeIdentifier, quoteIdentifier, quoteTableName };

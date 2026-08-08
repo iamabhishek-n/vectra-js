@@ -212,4 +212,4 @@ class PrismaVectorStore extends VectorStore {
     throw new Error('deleteDocuments requires ids or filter');
   }
 }
-module.exports = { PrismaVectorStore };
+module.exports = { PrismaVectorStore, isSafeIdentifier, quoteIdentifier, quoteTableName };
