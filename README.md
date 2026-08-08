@@ -559,22 +559,20 @@ Vectra collects anonymous usage data to help us improve the SDK, prioritize feat
 * **Measure adoption**: Helps us understand which providers (OpenAI vs Gemini) and vector stores are most popular.
 * **Drop support safely**: We can see if anyone is still using Node 18 before dropping it.
 
-### How to opt-out
+### How to opt-in
 
-Telemetry is **enabled by default**. To disable it:
+Telemetry is **disabled by default**. To enable it:
 
-**Option 1: Config**
+**Config**
 
 ```js
 const client = new VectraClient({
   // ...
-  telemetry: { enabled: false }
+  telemetry: { enabled: true }
 });
 ```
 
-**Option 2: Environment Variable**
-
-Set `VECTRA_TELEMETRY_DISABLED=1` or `DO_NOT_TRACK=1`.
+Even when opted in, telemetry is force-disabled if `VECTRA_TELEMETRY_DISABLED=1` or `DO_NOT_TRACK=1` is set in the environment — use either as a hard override to guarantee no data is ever sent, regardless of config.
 
 ---
 
