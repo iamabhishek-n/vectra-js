@@ -115,4 +115,4 @@ class PostgresHistory {
     }
   }
 }
-module.exports = { InMemoryHistory, RedisHistory, PostgresHistory };
+module.exports = { InMemoryHistory, RedisHistory, PostgresHistory, safeIdent };
