@@ -16,6 +16,7 @@ const { QdrantVectorStore } = require('./backends/qdrant_store');
 const { MilvusVectorStore } = require('./backends/milvus_store');
 const { getReranker } = require('./reranker');
 const { InMemoryHistory, RedisHistory, PostgresHistory } = require('./memory');
+const { FactStore } = require('./memory/factStore');
 const { OllamaBackend } = require('./backends/ollama');
 const { v5: uuidv5 } = require('uuid');
 const { v4: uuidv4 } = require('uuid');
@@ -129,6 +130,16 @@ class VectraClient {
       }
     } else {
       this.history = null;
+    }
+    if (this.config.memory?.facts?.enabled) {
+      this.factStore = new FactStore({
+        clientInstance: this.config.memory.facts.clientInstance,
+        tableName: this.config.memory.facts.tableName,
+        llm: this.llm,
+        embedder: this.embedder,
+      });
+    } else {
+      this.factStore = null;
     }
     this._isTemporaryFile = (p) => {
       const name = path.basename(p);

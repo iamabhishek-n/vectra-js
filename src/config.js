@@ -133,7 +133,12 @@ const RAGConfigSchema = z.object({
         content: z.string().default('content'),
         createdAt: z.string().default('createdAt')
       }).default({ sessionId: 'sessionId', role: 'role', content: 'content', createdAt: 'createdAt' })
-    }).optional()
+    }).optional(),
+    facts: z.object({
+      enabled: z.boolean().default(false),
+      clientInstance: z.any().optional(),
+      tableName: z.string().default('VectraFact'),
+    }).optional(),
   }).optional(),
   queryPlanning: z.object({ tokenBudget: z.number().default(2048), preferSummariesBelow: z.number().default(1024), includeCitations: z.boolean().default(true) }).optional(),
   grounding: z.object({ enabled: z.boolean().default(false), strict: z.boolean().default(false), maxSnippets: z.number().default(3) }).optional(),
