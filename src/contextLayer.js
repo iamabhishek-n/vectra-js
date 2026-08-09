@@ -49,6 +49,20 @@ async function buildContext(input) {
         used += tokens;
       }
     }
+    if (source.type === 'memory') {
+      if (!source.factStore || !source.sessionId) continue;
+      const facts = await source.factStore.read(source.sessionId, query);
+      for (const fact of (facts || [])) {
+        const content = `${fact.subject} ${fact.predicate} ${fact.object}`;
+        const tokens = estimateTokensCached(content);
+        if (used + tokens > maxTokens) {
+          dropped.push({ source: 'memory', fact });
+          continue;
+        }
+        parts.push({ source: 'memory', type: 'memory', content, tokens });
+        used += tokens;
+      }
+    }
   }
 
   return {
