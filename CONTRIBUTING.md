@@ -95,6 +95,9 @@ npm run lint:fix
    - All tests must pass (`npm test`)
    - Linting must pass (`npm run lint`)
 
+   (Maintainers: see [Branch Protection Setup](docs/BRANCH_PROTECTION_SETUP.md)
+   for the one-time manual step that makes these checks required before merging.)
+
 5. **Provide a clear PR description** - Explain what your change does, why it's needed, and how to test it.
 
 6. **Be responsive to feedback** - We'll review your PR and may request changes or clarifications.
