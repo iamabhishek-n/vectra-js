@@ -81,6 +81,22 @@ class FactStore {
       for (let i = 0; i < facts.length; i++) {
         const f = facts[i];
         const vec = `[${embeddings[i].join(',')}]`;
+
+        const existing = await client.query(
+          `SELECT "id","object" FROM "${t}" WHERE "sessionId" = $1 AND "subject" = $2 AND "predicate" = $3 AND "invalidAt" IS NULL`,
+          [sessionId, f.subject, f.predicate]
+        );
+        const existingRow = existing.rows[0];
+
+        if (existingRow && existingRow.object === f.object) {
+          continue;
+        }
+        if (existingRow) {
+          try {
+            await client.query(`UPDATE "${t}" SET "invalidAt" = NOW() WHERE "id" = $1`, [existingRow.id]);
+          } catch (_) {}
+        }
+
         const id = uuidv4();
         try {
           await client.query(
