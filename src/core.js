@@ -927,7 +927,38 @@ class VectraClient {
         const citationsEnabled = !!(this.config.generation && this.config.generation.structuredOutput === 'citations')
           && !(this.config.grounding && this.config.grounding.enabled && this.config.grounding.strict);
 
-        const { parts: contextParts, docMap } = this.buildContextParts(docs, query);
+        // Fetch conversation history first, and route it through buildContext with a
+        // RESERVED slice of the total token budget (up to half) — this is what fixes
+        // the Phase 1 research bug: history used to be concatenated into the prompt
+        // completely outside any budget accounting, so it could grow unbounded. Now
+        // it genuinely competes for budget, and the remaining budget (after history)
+        // is what buildContextParts gets for docs — buildContextParts itself, and its
+        // docMap/citation-index-alignment contract, are otherwise completely untouched
+        // by this refactor (a deliberate, lower-risk alternative to routing docs
+        // through buildContext's own generic packing, which would have required
+        // reconstructing docMap and risked breaking citation index alignment).
+        const totalBudget = (this.config.queryPlanning && this.config.queryPlanning.tokenBudget) ? this.config.queryPlanning.tokenBudget : DEFAULT_TOKEN_BUDGET;
+        let historyText = '';
+        let historyTokensUsed = 0;
+        if (this.history && sessionId) {
+          const fn = this.history.getRecent?.bind(this.history);
+          if (typeof fn === 'function') {
+            const out = fn.length >= 2 ? fn(sessionId, this.config.memory?.maxMessages || 10) : fn(sessionId);
+            const recent = out && typeof out.then === 'function' ? await out : out;
+            if (Array.isArray(recent) && recent.length > 0) {
+              const historyBudget = Math.floor(totalBudget / 2);
+              const historyPacked = await buildContext({
+                query,
+                budget: { maxTokens: historyBudget },
+                sources: [{ type: 'history', messages: recent }],
+              });
+              historyText = historyPacked.text;
+              historyTokensUsed = historyPacked.tokensUsed;
+            }
+          }
+        }
+
+        const { parts: contextParts, docMap } = this.buildContextParts(docs, query, totalBudget - historyTokensUsed);
         if (citationsEnabled) {
           contextParts.forEach((p, i) => { contextParts[i] = `[${i + 1}] ${p}`; });
         }
@@ -941,15 +972,6 @@ class VectraClient {
           }
         }
         const context = contextParts.join('\n---\n');
-        let historyText = '';
-        if (this.history && sessionId) {
-          const fn = this.history.getRecent?.bind(this.history);
-          if (typeof fn === 'function') {
-            const out = fn.length >= 2 ? fn(sessionId, this.config.memory?.maxMessages || 10) : fn(sessionId);
-            const recent = out && typeof out.then === 'function' ? await out : out;
-            historyText = Array.isArray(recent) ? recent.map(m => `${String(m.role).toUpperCase()}: ${m.content}`).join('\n') : '';
-          }
-        }
         let prompt;
         if (this.config.prompts && this.config.prompts.query) {
           prompt = this.config.prompts.query.replace(/\{\{context\}\}/g, context).replace(/\{\{question\}\}/g, query);

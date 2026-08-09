@@ -69,6 +69,19 @@ async function buildContext(input) {
         used += tokens;
       }
     }
+    if (source.type === 'history') {
+      const messages = source.messages || [];
+      for (const m of messages) {
+        const content = `${String(m.role).toUpperCase()}: ${m.content}`;
+        const tokens = estimateTokensCached(content);
+        if (used + tokens > maxTokens) {
+          dropped.push({ source: 'history' });
+          continue;
+        }
+        parts.push({ source: 'history', type: 'history', content, tokens });
+        used += tokens;
+      }
+    }
     if (source.type === 'tools') {
       for (const result of (source.results || [])) {
         const content = `Tool: ${result.name}\nResult: ${result.output}`;
