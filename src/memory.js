@@ -100,7 +100,7 @@ class PostgresHistory {
     const c = this.columnMap;
     const q = `SELECT "${c.role}" as role, "${c.content}" as content FROM "${t}" WHERE "${c.sessionId}" = $1 ORDER BY "${c.createdAt}" DESC LIMIT ${Math.max(1, n)}`;
     try {
-      let rows = await this._withConn(async (conn) => {
+      const rows = await this._withConn(async (conn) => {
         if (typeof conn.$queryRawUnsafe === 'function') {
           return await conn.$queryRawUnsafe(q, sessionId);
         } else if (typeof conn.query === 'function') {

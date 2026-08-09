@@ -167,9 +167,9 @@ class SQLiteLogger {
 
   logMetric(nameOrObj, value, tags = {}) {
     if (!this.enabled || !this.trackMetrics) return;
-    let name = (typeof nameOrObj === 'object') ? nameOrObj.name : nameOrObj;
-    let val = (typeof nameOrObj === 'object') ? nameOrObj.value : value;
-    let tgs = (typeof nameOrObj === 'object') ? (nameOrObj.tags || {}) : tags;
+    const name = (typeof nameOrObj === 'object') ? nameOrObj.name : nameOrObj;
+    const val = (typeof nameOrObj === 'object') ? nameOrObj.value : value;
+    const tgs = (typeof nameOrObj === 'object') ? (nameOrObj.tags || {}) : tags;
     this.metricBuffer.push({ name, value: val, tags: tgs, timestamp: Date.now() });
     if (this.metricBuffer.length >= this.bufferLimit) this.flush();
   }

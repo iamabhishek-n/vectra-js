@@ -415,8 +415,8 @@ class VectraClient {
     });
 
     const fileInfoList = [];
-    let allChunks = [];
-    let allHashes = [];
+    const allChunks = [];
+    const allHashes = [];
 
     for (const filePath of allFiles) {
       const stats = await fs.promises.stat(filePath);
@@ -489,7 +489,7 @@ class VectraClient {
     }
 
     // Prepare Documents
-    let documents = [];
+    const documents = [];
     for (const info of fileInfoList) {
       const fileDocs = await this._prepareDocuments(
         info.path, 
