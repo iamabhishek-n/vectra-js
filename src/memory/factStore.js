@@ -1,9 +1,17 @@
 const { safeIdent } = require('../memory');
+const { v4: uuidv4 } = require('uuid');
+
+const EXTRACTION_PROMPT = `Extract factual (subject, predicate, object) triples from the conversation turn below. Only extract clear, stated facts about the user or entities discussed — not questions, greetings, or the assistant's own commentary. Return strict JSON only, no prose: {"facts": [{"subject": "...", "predicate": "...", "object": "..."}]}. If there are no clear facts, return {"facts": []}.
+
+User: {{USER}}
+Assistant: {{ASSISTANT}}`;
 
 class FactStore {
   constructor(config) {
     this.client = config.clientInstance;
     this.tableName = safeIdent(config.tableName || 'VectraFact');
+    this.llm = config.llm;
+    this.embedder = config.embedder;
   }
 
   async _withConn(fn) {
@@ -38,6 +46,48 @@ class FactStore {
       }
       await client.query(`CREATE INDEX IF NOT EXISTS "${t}_session_temporal_idx" ON "${t}" ("sessionId", "validAt", "invalidAt")`);
       await client.query(`CREATE INDEX IF NOT EXISTS "${t}_subject_predicate_idx" ON "${t}" ("sessionId", "subject", "predicate")`);
+    });
+  }
+
+  async write(sessionId, turn) {
+    if (!sessionId || !this.llm || !this.embedder) return;
+    const prompt = EXTRACTION_PROMPT
+      .replace('{{USER}}', turn.userMessage || '')
+      .replace('{{ASSISTANT}}', turn.assistantMessage || '');
+
+    let facts;
+    try {
+      const raw = await this.llm.generate(prompt, 'You extract structured facts as strict JSON.');
+      const parsed = JSON.parse(raw);
+      facts = Array.isArray(parsed.facts) ? parsed.facts : [];
+    } catch (_) {
+      return;
+    }
+
+    facts = facts.filter(f => f && f.subject && f.predicate && f.object);
+    if (facts.length === 0) return;
+
+    const texts = facts.map(f => `${f.subject} ${f.predicate} ${f.object}`);
+    let embeddings;
+    try {
+      embeddings = await this.embedder.embedDocuments(texts);
+    } catch (_) {
+      return;
+    }
+
+    const t = this.tableName;
+    await this._withConn(async (client) => {
+      for (let i = 0; i < facts.length; i++) {
+        const f = facts[i];
+        const vec = `[${embeddings[i].join(',')}]`;
+        const id = uuidv4();
+        try {
+          await client.query(
+            `INSERT INTO "${t}" ("id","sessionId","subject","predicate","object","embedding","sourceMessageId") VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+            [id, sessionId, f.subject, f.predicate, f.object, vec, turn.sourceMessageId || null]
+          );
+        } catch (_) {}
+      }
     });
   }
 }
