@@ -42,11 +42,27 @@ function _clearTokenCache() {
   _tokenCache.clear();
 }
 
+function _reciprocalRankFusion(resultLists, k = 60) {
+  const scores = {};
+  const contentMap = {};
+  resultLists.forEach(list => {
+    list.forEach((doc, rank) => {
+      if (!contentMap[doc.content]) contentMap[doc.content] = doc;
+      if (!scores[doc.content]) scores[doc.content] = 0;
+      scores[doc.content] += 1 / (k + rank + 1);
+    });
+  });
+  return Object.keys(scores)
+    .sort((a, b) => scores[b] - scores[a])
+    .map(content => contentMap[content]);
+}
+
 async function buildContext(input) {
   const { query, budget = {}, sources = [], priority } = input;
   const maxTokens = budget.maxTokens ?? 2048;
   const parts = [];
   const dropped = [];
+  const warnings = [];
   let used = 0;
 
   const orderedSources = priority
@@ -60,6 +76,35 @@ async function buildContext(input) {
     : sources;
 
   for (const source of orderedSources) {
+    if (source.type === 'docs' && Array.isArray(source.stores)) {
+      const { stores, vector, limit = 5, filter, strategy } = source;
+      const settled = await Promise.allSettled(stores.map(store => {
+        const call = (strategy === 'hybrid' && typeof store.hybridSearch === 'function')
+          ? store.hybridSearch(query, vector, limit, filter)
+          : store.similaritySearch(vector, limit, filter);
+        return call;
+      }));
+      const successfulLists = [];
+      settled.forEach((res, i) => {
+        if (res.status === 'fulfilled') {
+          successfulLists.push(res.value);
+        } else {
+          warnings.push({ store: i, error: String(res.reason?.message || res.reason) });
+        }
+      });
+      const fused = _reciprocalRankFusion(successfulLists);
+      for (const doc of fused) {
+        const content = doc.content || '';
+        const tokens = estimateTokensCached(content);
+        if (used + tokens > maxTokens) {
+          dropped.push({ source: 'docs', metadata: doc.metadata || {} });
+          continue;
+        }
+        parts.push({ source: 'docs', type: 'docs', content, tokens });
+        used += tokens;
+      }
+      continue;
+    }
     if (source.type === 'docs') {
       for (const item of (source.items || [])) {
         const content = item.content || '';
@@ -119,7 +164,7 @@ async function buildContext(input) {
     tokensUsed: used,
     tokensBudget: maxTokens,
     dropped,
-    warnings: [],
+    warnings,
   };
 }
 
