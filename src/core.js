@@ -15,6 +15,7 @@ const { PostgresVectorStore } = require('./backends/postgres_store');
 const { QdrantVectorStore } = require('./backends/qdrant_store');
 const { MilvusVectorStore } = require('./backends/milvus_store');
 const { PineconeVectorStore } = require('./backends/pinecone_store');
+const { WeaviateVectorStore } = require('./backends/weaviate_store');
 const { getReranker } = require('./reranker');
 const { InMemoryHistory, RedisHistory, PostgresHistory } = require('./memory');
 const { FactStore } = require('./memory/factStore');
@@ -198,6 +199,7 @@ class VectraClient {
     if (t === 'qdrant') return new QdrantVectorStore(dbConfig);
     if (t === 'milvus') return new MilvusVectorStore(dbConfig);
     if (t === 'pinecone') return new PineconeVectorStore(dbConfig);
+    if (t === 'weaviate') return new WeaviateVectorStore(dbConfig);
     throw new Error(`Unsupported vector store type: ${t}`);
   }
 
