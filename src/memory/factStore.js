@@ -107,6 +107,23 @@ class FactStore {
       }
     });
   }
+
+  async read(sessionId, query, { limit = 10 } = {}) {
+    if (!sessionId || !this.embedder) return [];
+    const vector = await this.embedder.embedQuery(query);
+    const vec = `[${vector.join(',')}]`;
+    const t = this.tableName;
+
+    const res = await this.client.query(
+      `SELECT "id","subject","predicate","object","validAt","invalidAt"
+       FROM "${t}"
+       WHERE "sessionId" = $1 AND "invalidAt" IS NULL
+       ORDER BY "embedding" <=> $2
+       LIMIT $3`,
+      [sessionId, vec, Math.max(1, limit)]
+    );
+    return res.rows;
+  }
 }
 
 module.exports = { FactStore };
