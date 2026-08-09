@@ -44,9 +44,9 @@ describe('buildContext - multi-db timeout/circuit-breaker', () => {
   }, 2000);
 
   it('total wall-clock time is bounded by the slowest allowed store, not the sum of all stores', async () => {
-    const storeA = slowStore(30, [{ content: 'a', metadata: {}, score: 0.9 }]);
-    const storeB = slowStore(30, [{ content: 'b', metadata: {}, score: 0.9 }]);
-    const storeC = slowStore(30, [{ content: 'c', metadata: {}, score: 0.9 }]);
+    const storeA = slowStore(50, [{ content: 'a', metadata: {}, score: 0.9 }]);
+    const storeB = slowStore(50, [{ content: 'b', metadata: {}, score: 0.9 }]);
+    const storeC = slowStore(50, [{ content: 'c', metadata: {}, score: 0.9 }]);
 
     const start = Date.now();
     await buildContext({
@@ -56,6 +56,9 @@ describe('buildContext - multi-db timeout/circuit-breaker', () => {
     });
     const elapsed = Date.now() - start;
 
-    expect(elapsed).toBeLessThan(80);
+    // Sequential execution would take >=150ms (3 x 50ms); concurrent fan-out
+    // should land close to 50-70ms. 120ms leaves headroom for system-load
+    // jitter while still failing fast if the fan-out regresses to sequential.
+    expect(elapsed).toBeLessThan(120);
   });
 });
