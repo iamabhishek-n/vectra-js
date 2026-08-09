@@ -57,6 +57,16 @@ function _reciprocalRankFusion(resultLists, k = 60) {
     .map(content => contentMap[content]);
 }
 
+function _withTimeout(promise, ms, label) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`timeout after ${ms}ms${label ? ` (${label})` : ''}`)), ms);
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
+}
+
 async function buildContext(input) {
   const { query, budget = {}, sources = [], priority } = input;
   const maxTokens = budget.maxTokens ?? 2048;
@@ -77,12 +87,12 @@ async function buildContext(input) {
 
   for (const source of orderedSources) {
     if (source.type === 'docs' && Array.isArray(source.stores)) {
-      const { stores, vector, limit = 5, filter, strategy } = source;
-      const settled = await Promise.allSettled(stores.map(store => {
+      const { stores, vector, limit = 5, filter, strategy, timeoutMs = 5000 } = source;
+      const settled = await Promise.allSettled(stores.map((store, i) => {
         const call = (strategy === 'hybrid' && typeof store.hybridSearch === 'function')
           ? store.hybridSearch(query, vector, limit, filter)
           : store.similaritySearch(vector, limit, filter);
-        return call;
+        return _withTimeout(call, timeoutMs, `store ${i}`);
       }));
       const successfulLists = [];
       settled.forEach((res, i) => {
