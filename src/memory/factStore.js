@@ -12,6 +12,8 @@ class FactStore {
     this.tableName = safeIdent(config.tableName || 'VectraFact');
     this.llm = config.llm;
     this.embedder = config.embedder;
+    this.cacheTtlMs = config.cacheTtlMs ?? 30000;
+    this._readCache = new Map();
   }
 
   async _withConn(fn) {
@@ -110,6 +112,13 @@ class FactStore {
 
   async read(sessionId, query, { limit = 10 } = {}) {
     if (!sessionId || !this.embedder) return [];
+
+    const cacheKey = `${sessionId}:${query}`;
+    const cached = this._readCache.get(cacheKey);
+    if (cached && (Date.now() - cached.ts) < this.cacheTtlMs) {
+      return cached.value;
+    }
+
     const vector = await this.embedder.embedQuery(query);
     const vec = `[${vector.join(',')}]`;
     const t = this.tableName;
@@ -122,6 +131,7 @@ class FactStore {
        LIMIT $3`,
       [sessionId, vec, Math.max(1, limit)]
     );
+    this._readCache.set(cacheKey, { ts: Date.now(), value: res.rows });
     return res.rows;
   }
 }
