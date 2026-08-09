@@ -58,7 +58,8 @@ class FactStore {
     let facts;
     try {
       const raw = await this.llm.generate(prompt, 'You extract structured facts as strict JSON.');
-      const parsed = JSON.parse(raw);
+      const cleaned = String(raw).trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+      const parsed = JSON.parse(cleaned);
       facts = Array.isArray(parsed.facts) ? parsed.facts : [];
     } catch (_) {
       return;

@@ -36,6 +36,17 @@ describe('FactStore.write', () => {
     expect(object).toBe('coffee');
   });
 
+  it('extracts triples when the LLM wraps its JSON in a markdown code fence', async () => {
+    const { store, conn } = makeStore({
+      llmResponse: '```json\n' + JSON.stringify({ facts: [{ subject: 'user', predicate: 'likes', object: 'tea' }] }) + '\n```',
+    });
+
+    await store.write('session-1', { userMessage: 'I like tea', assistantMessage: 'Noted!' });
+
+    expect(conn.inserted).toHaveLength(1);
+    expect(conn.inserted[0][4]).toBe('tea');
+  });
+
   it('extracts multiple triples from one turn', async () => {
     const { store, conn } = makeStore({
       llmResponse: JSON.stringify({ facts: [
