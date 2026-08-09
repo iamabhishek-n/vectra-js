@@ -76,4 +76,25 @@ describe('FactStore end-to-end', () => {
 
     expect(factsB).toHaveLength(0);
   });
+
+  it('a read cached before a write is not served stale after the write changes that session\'s facts', async () => {
+    const conn = new InMemoryFakeConn();
+    const embedder = { embedDocuments: jest.fn(async (t) => t.map(() => [0.1])), embedQuery: jest.fn(async () => [0.1]) };
+    const llmSeq = [
+      JSON.stringify({ facts: [{ subject: 'user', predicate: 'lives_in', object: 'Berlin' }] }),
+      JSON.stringify({ facts: [{ subject: 'user', predicate: 'lives_in', object: 'Tokyo' }] }),
+    ];
+    let call = 0;
+    const llm = { generate: jest.fn(async () => llmSeq[call++]) };
+    const store = new FactStore({ clientInstance: conn, tableName: 'VectraFact', llm, embedder });
+
+    await store.write('session-1', { userMessage: 'I live in Berlin', assistantMessage: 'Cool!' });
+    const firstRead = await store.read('session-1', 'where does the user live');
+    expect(firstRead.find(f => f.predicate === 'lives_in').object).toBe('Berlin');
+
+    await store.write('session-1', { userMessage: 'I moved to Tokyo', assistantMessage: 'Wow!' });
+    const secondRead = await store.read('session-1', 'where does the user live'); // same query string, would hit a stale cache entry if not invalidated
+
+    expect(secondRead.find(f => f.predicate === 'lives_in').object).toBe('Tokyo');
+  });
 });

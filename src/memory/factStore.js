@@ -108,6 +108,15 @@ class FactStore {
         } catch (_) {}
       }
     });
+
+    this._invalidateSessionCache(sessionId);
+  }
+
+  _invalidateSessionCache(sessionId) {
+    const prefix = `${sessionId}:`;
+    for (const key of this._readCache.keys()) {
+      if (key.startsWith(prefix)) this._readCache.delete(key);
+    }
   }
 
   async read(sessionId, query, { limit = 10 } = {}) {
