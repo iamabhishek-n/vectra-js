@@ -33,7 +33,13 @@ async function buildContext(input) {
   let used = 0;
 
   const orderedSources = priority
-    ? [...sources].sort((a, b) => priority.indexOf(a.type) - priority.indexOf(b.type))
+    ? [...sources].sort((a, b) => {
+        const ai = priority.indexOf(a.type);
+        const bi = priority.indexOf(b.type);
+        const aRank = ai === -1 ? priority.length : ai;
+        const bRank = bi === -1 ? priority.length : bi;
+        return aRank - bRank;
+      })
     : sources;
 
   for (const source of orderedSources) {
