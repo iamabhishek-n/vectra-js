@@ -370,7 +370,7 @@ function setBackend(type) {
 
 async function fetchConfig() {
     try {
-        const response = await fetch('/config');
+        const response = await fetch('/config', { headers: { 'X-Vectra-Token': window.__VECTRA_TOKEN__ || '' } });
         if (!response.ok) throw new Error('Failed to load config');
         const config = await response.json();
         
@@ -797,7 +797,7 @@ async function saveConfig(e) {
 
         const res = await fetch('/config', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-Vectra-Token': window.__VECTRA_TOKEN__ || '' },
             body: JSON.stringify({ backend: isPythonBackend ? 'python' : 'node', code, config: cleanCfg })
         });
 

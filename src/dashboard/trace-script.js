@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadTraceDetails(traceId) {
     try {
-        const res = await fetch(`/api/observability/traces/${traceId}`);
+        const res = await fetch(`/api/observability/traces/${traceId}`, { headers: { 'X-Vectra-Token': window.__VECTRA_TOKEN__ || '' } });
         if (!res.ok) throw new Error('Failed to fetch trace details');
         
         const trace = await res.json();

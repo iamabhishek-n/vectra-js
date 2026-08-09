@@ -58,7 +58,7 @@ function switchView(view) {
 async function fetchAPI(endpoint) {
     try {
         const url = `/api/observability/${endpoint}${currentProject !== 'all' ? `?projectId=${currentProject}` : ''}`;
-        const res = await fetch(url);
+        const res = await fetch(url, { headers: { 'X-Vectra-Token': window.__VECTRA_TOKEN__ || '' } });
         if (!res.ok) throw new Error('API Error');
         return await res.json();
     } catch (e) {

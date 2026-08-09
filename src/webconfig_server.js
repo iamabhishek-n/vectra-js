@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { ProviderType, ChunkingStrategy, RetrievalStrategy } = require('./config');
 const telemetry = require('./telemetry');
 const sqlite3 = require('sqlite3').verbose();
@@ -89,9 +90,66 @@ function serveStatic(res, filePath, contentType) {
   }
 }
 
+// Resolves `requestedPath` under `baseDir`, returning null if the resolved
+// path would escape baseDir (e.g. via `../` segments or an absolute path).
+// Guards every static-asset route against path traversal.
+function safeJoin(baseDir, requestedPath) {
+  let decoded;
+  try {
+    decoded = decodeURIComponent(requestedPath);
+  } catch (_) {
+    return null;
+  }
+  if (decoded.includes('\0')) return null;
+  const resolvedBase = path.resolve(baseDir);
+  const resolvedTarget = path.resolve(resolvedBase, decoded);
+  if (resolvedTarget !== resolvedBase && !resolvedTarget.startsWith(resolvedBase + path.sep)) {
+    return null;
+  }
+  return resolvedTarget;
+}
+
+// Serves an HTML file with the session's auth token injected as
+// `window.__VECTRA_TOKEN__`, so the page's own scripts can call the
+// protected /config and /api/observability/* routes. Safe to serve without
+// auth: the token is only ever readable by whoever actually loads this page
+// in their own browser (same-origin), not by a cross-origin attacker.
+function serveHtmlWithToken(res, filePath, authToken) {
+  if (!fs.existsSync(filePath)) {
+    res.writeHead(404);
+    res.end();
+    return;
+  }
+  let html = fs.readFileSync(filePath, 'utf-8');
+  const inject = `<script>window.__VECTRA_TOKEN__=${JSON.stringify(authToken)};</script>`;
+  html = html.includes('</head>') ? html.replace('</head>', `${inject}</head>`) : inject + html;
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+  res.end(html);
+}
+
+// Constant-time token check against the header or query-string token.
+// Query-string is accepted only so a bookmarked/shared link can still work;
+// state-changing routes should be called with the header by the SDK's own
+// dashboard/webconfig UI scripts.
+function isAuthorized(req, authToken) {
+  const headerToken = req.headers['x-vectra-token'];
+  let queryToken = null;
+  const qIndex = req.url.indexOf('?');
+  if (qIndex !== -1) {
+    queryToken = new URLSearchParams(req.url.slice(qIndex + 1)).get('token');
+  }
+  const provided = headerToken || queryToken;
+  if (!provided) return false;
+  const a = Buffer.from(String(provided));
+  const b = Buffer.from(authToken);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
 function start(configPath, mode = 'webconfig', port = 8766, openInBrowser = true) {
   const absConfigPath = path.resolve(configPath);
-  
+  const authToken = crypto.randomBytes(24).toString('hex');
+
   // Init telemetry
   let cfg = {};
   try {
@@ -99,12 +157,19 @@ function start(configPath, mode = 'webconfig', port = 8766, openInBrowser = true
   } catch (_) {}
   telemetry.init(cfg);
   telemetry.track('feature_used', { feature: mode }); // mode is 'webconfig' or 'dashboard'
-  
+
+  return new Promise((resolveStart) => {
   const createServer = (currentPort) => {
     const server = http.createServer((req, res) => {
       const sendJson = (status, obj) => {
         res.writeHead(status, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(obj));
+      };
+
+      const requireAuth = () => {
+        if (isAuthorized(req, authToken)) return true;
+        sendJson(401, { error: 'Unauthorized. Pass the token printed at startup via the X-Vectra-Token header.' });
+        return false;
       };
 
       // --- Dashboard Routes ---
@@ -119,16 +184,25 @@ function start(configPath, mode = 'webconfig', port = 8766, openInBrowser = true
       // Serve Dashboard HTML
       if (req.method === 'GET' && req.url === '/dashboard/') {
         const filePath = path.join(__dirname, 'dashboard', 'index.html');
-        serveStatic(res, filePath, 'text/html; charset=utf-8');
+        serveHtmlWithToken(res, filePath, authToken);
         return;
       }
 
       // Serve Dashboard Assets
       if (req.method === 'GET' && req.url.startsWith('/dashboard/')) {
         const assetName = req.url.split('?')[0].replace('/dashboard/', '');
-        const filePath = path.join(__dirname, 'dashboard', assetName);
+        const filePath = safeJoin(path.join(__dirname, 'dashboard'), assetName);
+        if (!filePath) {
+          res.writeHead(403);
+          res.end();
+          return;
+        }
         if (fs.existsSync(filePath)) {
              const ext = path.extname(filePath);
+             if (ext === '.html') {
+               serveHtmlWithToken(res, filePath, authToken);
+               return;
+             }
              let type = 'text/plain';
              if (ext === '.css') type = 'text/css';
              if (ext === '.js') type = 'application/javascript';
@@ -140,8 +214,9 @@ function start(configPath, mode = 'webconfig', port = 8766, openInBrowser = true
       }
 
       // --- Observability API ---
-      
+
       if (req.method === 'GET' && req.url.startsWith('/api/observability/')) {
+          if (!requireAuth()) return;
           const db = getDb(absConfigPath);
           if (!db) {
               sendJson(400, { error: 'Observability not enabled or DB not found' });
@@ -236,26 +311,35 @@ function start(configPath, mode = 'webconfig', port = 8766, openInBrowser = true
       // Serve index.html
       if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html')) {
         const filePath = path.join(__dirname, 'ui', 'index.html');
-        serveStatic(res, filePath, 'text/html; charset=utf-8');
+        serveHtmlWithToken(res, filePath, authToken);
         return;
       }
 
       // Serve static assets
       if (req.method === 'GET' && !req.url.startsWith('/config')) {
-        const possiblePath = path.join(__dirname, 'ui', req.url.substring(1));
+        const possiblePath = safeJoin(path.join(__dirname, 'ui'), req.url.split('?')[0].substring(1));
+        if (!possiblePath) {
+          res.writeHead(403);
+          res.end();
+          return;
+        }
         if (fs.existsSync(possiblePath) && fs.lstatSync(possiblePath).isFile()) {
           const ext = path.extname(possiblePath).toLowerCase();
+          if (ext === '.html') {
+            serveHtmlWithToken(res, possiblePath, authToken);
+            return;
+          }
           let contentType = 'text/plain';
           if (ext === '.css') contentType = 'text/css';
           if (ext === '.js') contentType = 'application/javascript';
-          if (ext === '.html') contentType = 'text/html';
-          
+
           serveStatic(res, possiblePath, contentType);
           return;
         }
       }
 
       if (req.method === 'GET' && req.url === '/config') {
+        if (!requireAuth()) return;
         if (fs.existsSync(absConfigPath)) {
           try {
             const raw = fs.readFileSync(absConfigPath, 'utf-8');
@@ -273,6 +357,7 @@ function start(configPath, mode = 'webconfig', port = 8766, openInBrowser = true
       }
 
       if (req.method === 'POST' && req.url === '/config') {
+        if (!requireAuth()) return;
         let body = '';
         req.on('data', chunk => body += chunk);
         req.on('end', () => {
@@ -326,19 +411,23 @@ function start(configPath, mode = 'webconfig', port = 8766, openInBrowser = true
       }
     });
 
-    server.listen(currentPort, () => {
-      let url = `http://localhost:${currentPort}/`;
+    server.listen(currentPort, '127.0.0.1', () => {
+      const actualPort = server.address().port;
+      let url = `http://localhost:${actualPort}/`;
       if (mode === 'dashboard') {
-        url = `http://localhost:${currentPort}/dashboard`;
+        url = `http://localhost:${actualPort}/dashboard`;
       }
       console.log(`Vectra WebConfig running at ${url}`);
+      console.log(`Auth token (send as X-Vectra-Token header for API calls): ${authToken}`);
       if (openInBrowser) {
         openBrowser(url);
       }
+      resolveStart({ server, port: actualPort, authToken });
     });
   };
 
   createServer(port);
+  });
 }
 
 module.exports = { start };
