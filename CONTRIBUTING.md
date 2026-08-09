@@ -120,6 +120,22 @@ When reporting issues, include:
 - Your environment (Node.js version, OS, package manager)
 - Any relevant code snippets or error messages
 
+## Versioning and Changelog Discipline
+
+This project follows [Semantic Versioning](https://semver.org/). Version
+bumps and `CHANGELOG.md` updates should happen in their own commit/PR,
+separate from feature/fix commits.
+
+This matters in practice: this repository's own history has several
+same-day version bumps (e.g. `0.9.4` through `0.9.6`, and `0.9.10`/`0.9.11`)
+landing as their own isolated commits alongside unrelated CI and feature
+work committed the same day, and at least one version bump (`0.9.12`) was
+folded into a feature commit rather than split out. That made it
+significantly harder to reconstruct an accurate `CHANGELOG.md` after the
+fact, since a version bump on its own commit gives no indication of what it
+actually shipped. Keeping version bumps isolated, and pairing them with a
+`CHANGELOG.md` entry in the same commit/PR, avoids repeating that problem.
+
 ---
 
 Thank you for contributing to Vectra! We appreciate your help in making it better.
