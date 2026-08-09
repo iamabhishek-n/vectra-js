@@ -10,14 +10,31 @@ function _encodeForTest(text) {
   return _getTokenEncoder().encode(String(text));
 }
 
+// Bounded, LRU-evicted — matches the existing LRUCache convention already used for
+// the embedding cache in core.js (self-contained here rather than shared, to avoid
+// a circular require between contextLayer.js and core.js: core.js requires this
+// module for buildContext).
+const TOKEN_CACHE_MAX_SIZE = 10000;
 const _tokenCache = new Map();
 
 function estimateTokensCached(text) {
   if (!text) return 0;
   const key = String(text);
-  if (_tokenCache.has(key)) return _tokenCache.get(key);
-  const count = _encodeForTest(key).length;
+  if (_tokenCache.has(key)) {
+    const count = _tokenCache.get(key);
+    _tokenCache.delete(key);
+    _tokenCache.set(key, count); // refresh recency
+    return count;
+  }
+  // Called via module.exports (not the closure-local reference) so tests can
+  // jest.spyOn the exported symbol and actually observe internal calls — a plain
+  // closure call is invisible to spyOn on the export, a real gap found in self-review.
+  const count = module.exports._encodeForTest(key).length;
   _tokenCache.set(key, count);
+  if (_tokenCache.size > TOKEN_CACHE_MAX_SIZE) {
+    const oldestKey = _tokenCache.keys().next().value;
+    _tokenCache.delete(oldestKey);
+  }
   return count;
 }
 
