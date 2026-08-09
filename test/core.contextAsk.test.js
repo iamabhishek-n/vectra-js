@@ -61,4 +61,28 @@ describe('VectraClient.context.ask', () => {
 
     expect(result.parts.some(p => p.type === 'tools')).toBe(true);
   });
+
+  it('enforces guardrails before any embedding call, same as queryRAG (found by security review — was bypassable)', async () => {
+    const client = new VectraClient(makeConfig({ guardrails: { maxQueryLength: 10 } }));
+    client.embedder.embedQuery = jest.fn();
+
+    await expect(client.context.ask('this query is way too long for the limit'))
+      .rejects.toThrow('GuardrailViolation: query exceeds maxQueryLength');
+    expect(client.embedder.embedQuery).not.toHaveBeenCalled();
+  });
+
+  it('runs the onBeforeRetrieve middleware, same as queryRAG (found by security review — was bypassable)', async () => {
+    const client = new VectraClient(makeConfig());
+    client.embedder.embedQuery = jest.fn().mockResolvedValue([0.1, 0.2]);
+    client.vectorStore.similaritySearch = jest.fn().mockResolvedValue([]);
+    const middlewareSpy = jest.fn(async (q, v) => [q, v]);
+    client.runMiddlewares = jest.fn(async (name, ...args) => {
+      if (name === 'onBeforeRetrieve') return middlewareSpy(...args);
+      return args;
+    });
+
+    await client.context.ask('q');
+
+    expect(client.runMiddlewares).toHaveBeenCalledWith('onBeforeRetrieve', 'q', [0.1, 0.2]);
+  });
 });

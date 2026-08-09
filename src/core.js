@@ -144,7 +144,9 @@ class VectraClient {
     }
     this.context = {
       ask: async (query, opts = {}) => {
-        const queryVector = await this.embedder.embedQuery(query);
+        checkGuardrails(query, this.config.guardrails);
+        let queryVector = await this.embedder.embedQuery(query);
+        [query, queryVector] = await this.runMiddlewares('onBeforeRetrieve', query, queryVector);
         const docs = await this.vectorStore.similaritySearch(queryVector, 5);
         const sources = [{ type: 'docs', items: docs.map(d => ({ content: d.content, metadata: d.metadata })) }];
         if (opts.sessionId && this.factStore) {
@@ -625,8 +627,8 @@ class VectraClient {
     return getTokenEncoder().encode(String(text)).length;
   }
 
-  buildContextParts(docs, query) {
-    const budget = (this.config.queryPlanning && this.config.queryPlanning.tokenBudget) ? this.config.queryPlanning.tokenBudget : DEFAULT_TOKEN_BUDGET;
+  buildContextParts(docs, query, budgetOverride = null) {
+    const budget = budgetOverride ?? ((this.config.queryPlanning && this.config.queryPlanning.tokenBudget) ? this.config.queryPlanning.tokenBudget : DEFAULT_TOKEN_BUDGET);
     const preferSumm = (this.config.queryPlanning && this.config.queryPlanning.preferSummariesBelow) ? this.config.queryPlanning.preferSummariesBelow : DEFAULT_PREFER_SUMMARY_BELOW;
     const parts = [];
     const docMap = [];
