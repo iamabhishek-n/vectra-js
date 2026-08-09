@@ -17,6 +17,7 @@ const { MilvusVectorStore } = require('./backends/milvus_store');
 const { getReranker } = require('./reranker');
 const { InMemoryHistory, RedisHistory, PostgresHistory } = require('./memory');
 const { FactStore } = require('./memory/factStore');
+const { buildContext } = require('./contextLayer');
 const { OllamaBackend } = require('./backends/ollama');
 const { v5: uuidv5 } = require('uuid');
 const { v4: uuidv4 } = require('uuid');
@@ -141,6 +142,21 @@ class VectraClient {
     } else {
       this.factStore = null;
     }
+    this.context = {
+      ask: async (query, opts = {}) => {
+        const queryVector = await this.embedder.embedQuery(query);
+        const docs = await this.vectorStore.similaritySearch(queryVector, 5);
+        const sources = [{ type: 'docs', items: docs.map(d => ({ content: d.content, metadata: d.metadata })) }];
+        if (opts.sessionId && this.factStore) {
+          sources.push({ type: 'memory', factStore: this.factStore, sessionId: opts.sessionId });
+        }
+        if (opts.tools) {
+          sources.push({ type: 'tools', results: opts.tools });
+        }
+        const budget = this.config.contextLayer?.budget || { maxTokens: 2048 };
+        return buildContext({ query, budget, sources, priority: this.config.contextLayer?.priority });
+      },
+    };
     this._isTemporaryFile = (p) => {
       const name = path.basename(p);
       if (name.startsWith('~$')) return true;
