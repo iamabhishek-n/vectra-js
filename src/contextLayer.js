@@ -63,6 +63,18 @@ async function buildContext(input) {
         used += tokens;
       }
     }
+    if (source.type === 'tools') {
+      for (const result of (source.results || [])) {
+        const content = `Tool: ${result.name}\nResult: ${result.output}`;
+        const tokens = estimateTokensCached(content);
+        if (used + tokens > maxTokens) {
+          dropped.push({ source: 'tools', name: result.name });
+          continue;
+        }
+        parts.push({ source: 'tools', type: 'tools', content, tokens });
+        used += tokens;
+      }
+    }
   }
 
   return {
