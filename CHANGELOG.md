@@ -54,6 +54,13 @@ new version number.
   and native filter-based listing, no fallback needed).
 
 ### Fixed
+- **Security**: the `webconfig`/`dashboard` server (`vectra webconfig`,
+  `vectra dashboard`) had a path traversal vulnerability in its static
+  asset routes (arbitrary file read) and no authentication on `/config`
+  (unauthenticated read of stored API keys, unauthenticated write of
+  arbitrary config) or `/api/observability/*`, and bound to `0.0.0.0` by
+  default. Fixed with a traversal-safe path resolver, a random per-run
+  token required on the sensitive routes, and a `127.0.0.1` bind.
 - `contextLayer` config was silently dropped by schema validation (no field
   declared, and the schema wasn't `.passthrough()`), so `context.ask`'s
   budget and priority were always the hardcoded 2048-token default no matter
