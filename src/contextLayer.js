@@ -25,4 +25,40 @@ function _clearTokenCache() {
   _tokenCache.clear();
 }
 
-module.exports = { estimateTokensCached, _clearTokenCache, _encodeForTest };
+async function buildContext(input) {
+  const { query, budget = {}, sources = [], priority } = input;
+  const maxTokens = budget.maxTokens ?? 2048;
+  const parts = [];
+  const dropped = [];
+  let used = 0;
+
+  const orderedSources = priority
+    ? [...sources].sort((a, b) => priority.indexOf(a.type) - priority.indexOf(b.type))
+    : sources;
+
+  for (const source of orderedSources) {
+    if (source.type === 'docs') {
+      for (const item of (source.items || [])) {
+        const content = item.content || '';
+        const tokens = estimateTokensCached(content);
+        if (used + tokens > maxTokens) {
+          dropped.push({ source: 'docs', metadata: item.metadata || {} });
+          continue;
+        }
+        parts.push({ source: 'docs', type: 'docs', content, tokens });
+        used += tokens;
+      }
+    }
+  }
+
+  return {
+    parts,
+    text: parts.map(p => p.content).join('\n---\n'),
+    tokensUsed: used,
+    tokensBudget: maxTokens,
+    dropped,
+    warnings: [],
+  };
+}
+
+module.exports = { estimateTokensCached, _clearTokenCache, _encodeForTest, buildContext };
