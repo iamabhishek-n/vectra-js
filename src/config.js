@@ -140,6 +140,12 @@ const RAGConfigSchema = z.object({
       tableName: z.string().default('VectraFact'),
     }).optional(),
   }).optional(),
+  // Configures VectraClient.context.ask's packing budget and source priority.
+  // See src/contextLayer.js's buildContext for what these fields do.
+  contextLayer: z.object({
+    budget: z.object({ maxTokens: z.number() }).optional(),
+    priority: z.array(z.string()).optional(),
+  }).optional(),
   queryPlanning: z.object({ tokenBudget: z.number().default(2048), preferSummariesBelow: z.number().default(1024), includeCitations: z.boolean().default(true) }).optional(),
   grounding: z.object({ enabled: z.boolean().default(false), strict: z.boolean().default(false), maxSnippets: z.number().default(3) }).optional(),
   generation: z.object({ structuredOutput: z.enum(['none','citations']).default('none'), outputFormat: z.enum(['text','json']).default('text') }).optional(),

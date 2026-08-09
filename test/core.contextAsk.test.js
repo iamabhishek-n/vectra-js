@@ -85,4 +85,23 @@ describe('VectraClient.context.ask', () => {
 
     expect(client.runMiddlewares).toHaveBeenCalledWith('onBeforeRetrieve', 'q', [0.1, 0.2]);
   });
+
+  it('applies a custom contextLayer.budget.maxTokens from config, through real schema parsing (not stripped as an unknown key)', async () => {
+    // Regression guard: RAGConfigSchema previously had no `contextLayer` field
+    // (a bare z.object, not .passthrough()), so Zod silently stripped it during
+    // parsing — a user setting contextLayer.budget.maxTokens never actually
+    // changed the packing budget, context.ask always fell back to the
+    // hardcoded 2048 default. This goes through VectraClient's real config
+    // parsing, not a hand-built config object, so it fails if the schema
+    // regresses to dropping the field.
+    const client = new VectraClient(makeConfig({ contextLayer: { budget: { maxTokens: 12 } } }));
+    client.embedder.embedQuery = jest.fn().mockResolvedValue([0.1, 0.2]);
+    client.vectorStore.similaritySearch = jest.fn().mockResolvedValue([
+      { content: 'a'.repeat(500), metadata: {} },
+    ]);
+
+    const result = await client.context.ask('q');
+
+    expect(result.tokensBudget).toBe(12);
+  });
 });
