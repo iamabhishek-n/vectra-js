@@ -34,8 +34,32 @@ new version number.
   step.
 - `CONTRIBUTING.md`, pull request template, and documented manual
   branch-protection setup.
+- A context and memory layer: `client.context.ask`, a budget-aware packing
+  primitive (`buildContext`) that fuses retrieved docs, durable facts, tool
+  output, and history into one prompt, reporting `dropped` and `warnings`
+  explicitly instead of silently truncating.
+- A bi-temporal fact store (`FactStore`, `memory.facts` config): facts
+  extracted from conversations via LLM, with contradiction detection that
+  marks a superseded fact invalid at that point in time instead of deleting
+  it. Enable with `memory.facts.enabled`, then `client.factStore.write(...)`
+  and `client.factStore.read(...)`.
+- Multi-database fusion: a `docs` context source can take a `stores` array
+  instead of one vector store, fanning out concurrently with a per-store
+  timeout and fusing results with reciprocal rank fusion. A slow or failed
+  store produces a warning, not a failed call.
+- `contextLayer.budget` and `contextLayer.priority` config, controlling
+  `context.ask`'s token budget and source packing order.
+- Two new vector store backends: Pinecone (client-side hybrid search RRF
+  fallback, no native listing endpoint) and Weaviate (native hybrid search
+  and native filter-based listing, no fallback needed).
 
 ### Fixed
+- `contextLayer` config was silently dropped by schema validation (no field
+  declared, and the schema wasn't `.passthrough()`), so `context.ask`'s
+  budget and priority were always the hardcoded 2048-token default no matter
+  what a caller configured. Now declared and respected.
+- `context.ask` skipped guardrails and the `onBeforeRetrieve` middleware that
+  `queryRAG` always runs; found by review, now enforced identically.
 - Telemetry now defaults to off and is opt-in only.
 - ReDoS-vulnerable pattern in the email PII check; explicit `0` limits are now
   treated as real limits instead of being ignored.
@@ -51,6 +75,10 @@ new version number.
   below, which was the version bump that shipped this on npm).
 - README corrected to reflect that telemetry is opt-in, not opt-out; guardrail
   and ingestion size-limit defaults documented.
+- README repositioned around two co-equal pillars, RAG and the context/memory
+  layer, instead of presenting the context layer as a subsection of a
+  RAG-first pitch. Vector store list, feature matrix, and config reference
+  updated for Pinecone and Weaviate.
 
 ## [1.0.2] - 2026-04-24
 ### Changed
